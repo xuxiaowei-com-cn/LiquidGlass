@@ -39,7 +39,8 @@ export struct LiquidTabBar {
   private tapSeq: number = 0;
   private downX: number = 0;
   private downY: number = 0;
-  private lastSelectAt: number = 0;
+  private touchActive: boolean = false;
+  private lastTouchEnd: number = 0;
 
   aboutToAppear(): void {
     try {
@@ -78,6 +79,16 @@ export struct LiquidTabBar {
     const influence: number = Math.max(0, 1 - distance / radius);
     const bloom: number = Math.max(0, Math.min(1, (this.bloomX - 1) / 0.45));
     return 1 + influence * bloom * 0.34;
+  }
+
+  private clampBubbleX(x: number): number {
+    return Math.max(0, Math.min(this.barW - this.bubbleW(), x));
+  }
+
+  private nearestTab(): number {
+    const center: number = this.bubbleX + this.bubbleW() / 2;
+    const raw: number = Math.round((center - this.tabW() / 2) / this.tabW());
+    return Math.max(0, Math.min(TAB_COUNT - 1, raw));
   }
 
   private settleBloom(seq: number): void {
@@ -119,27 +130,12 @@ export struct LiquidTabBar {
         this.glow = 0;
         this.lensFill = 1;
         this.lensRim = 1;
+        this.bubbleX = this.tabW() * this.selected + ITEM_GAP / 2;
       });
     }
   }
 
   private selectTab(index: number): void {
-    const now: number = Date.now();
-    if (now - this.lastSelectAt < 320) {
-      this.getUIContext().animateTo({
-        duration: 380,
-        curve: curves.springMotion(0.46, 0.84)
-      }, () => {
-        this.bloomX = 1;
-        this.bloomY = 1;
-        this.glow = 0;
-        this.lensFill = 1;
-        this.lensRim = 1;
-      });
-      return;
-    }
-    this.lastSelectAt = now;
-
     if (index === this.selected) {
       // Tapping the active tab gives the lens a small "breath".
       this.tapSeq++;
@@ -204,6 +200,7 @@ export struct LiquidTabBar {
     .onTouch((event: TouchEvent) => {
       const ui = this.getUIContext();
       if (event.type === TouchType.Down) {
+        this.touchActive = true;
         const p = event.touches[0];
         this.downX = p ? p.x : 0;
         this.downY = p ? p.y : 0;
@@ -221,8 +218,11 @@ export struct LiquidTabBar {
         }, () => {
           this.barScale = 1.05;
         });
-        // While the finger stays down the selection lens keeps swelling,
-        // far beyond the bar silhouette.
+        // Glide the lens under the finger, then let it swell.
+        const barX: number = this.tabW() * index + (p ? p.x : this.tabW() / 2);
+        ui.animateTo({ duration: 140, curve: Curve.EaseOut }, () => {
+          this.bubbleX = this.clampBubbleX(barX - this.bubbleW() / 2);
+        });
         ui.animateTo({
           duration: 320,
           curve: curves.springMotion(0.34, 0.7)
@@ -232,25 +232,46 @@ export struct LiquidTabBar {
           this.glow = 1;
           this.lensFill = 0.3;
           this.lensRim = 0.8;
-          });
+        });
+      } else if (event.type === TouchType.Move) {
+        const t = event.touches[0];
+        if (t) {
+          const barX: number = this.tabW() * index + t.x;
+          this.bubbleX = this.clampBubbleX(barX - this.bubbleW() / 2);
+
+          const dx: number = t.x - this.downX;
+          const dy: number = t.y - this.downY;
+          if (Math.sqrt(dx * dx + dy * dy) > 8) {
+            this.pressed = -1;
+          }
+        }
       } else if (event.type === TouchType.Up) {
         const t = event.changedTouches.length > 0 ? event.changedTouches[0] : event.touches[0];
-        const dx: number = t ? t.x - this.downX : 0;
         const dy: number = t ? t.y - this.downY : 0;
-        const moved: number = Math.sqrt(dx * dx + dy * dy);
 
-        // Select on release as well, so a long press still commits the tab.
-        if (moved < 16) {
-          this.releasePress(false);
-          this.selectTab(index);
-        } else {
+        this.touchActive = false;
+        this.lastTouchEnd = Date.now();
+
+        if (Math.abs(dy) > 60) {
+          // Dragged vertically away from the bar: cancel and flow home.
           this.releasePress(true);
+        } else {
+          // The lens is already under the finger; settle on the nearest tab.
+          const nearest: number = this.nearestTab();
+          this.releasePress(false);
+          this.selectTab(nearest);
         }
       } else if (event.type === TouchType.Cancel) {
+        this.touchActive = false;
+        this.lastTouchEnd = Date.now();
         this.releasePress(true);
       }
     })
     .onClick(() => {
+      // A touch gesture is already resolved by Up; ignore its trailing click.
+      if (this.touchActive || Date.now() - this.lastTouchEnd < 400) {
+        return;
+      }
       this.selectTab(index);
     })
     .accessibilityText(label)

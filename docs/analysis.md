@@ -163,6 +163,7 @@ ui.animateTo({
 | --- | --- | --- | --- |
 | 按下 | 130 ms | EaseOut | 图标轻微缩小（0.95），标签和图标变蓝 |
 | 按住 | 260 ms | spring(0.32, 0.78) | **整条栏 1.05×，选中气泡 1.45×**，明显高出、长出栏体 |
+| 拖动 | 实时 | — | `bubbleX` 跟随手指，不吸附标签；松手落到最近标签 |
 | 松开 | 360 ms | spring(0.42, 0.86) | 整条栏回弹到 1.0 |
 | 透镜膨胀 | 170 ms | EaseOut | 1.35 × 1.35，明显高出、长出栏体；内部材质淡出到 30% |
 | 最大膨胀 | 与膨胀同步 | — | `lensFill = 0.3`、`lensRim = 0.8`；导航栏图标/文字放大 1.0–1.3×，页面内容不缩放 |
@@ -248,9 +249,30 @@ ui.animateTo({ duration: 360, curve: curves.springMotion(0.42, 0.86) }, () => {
 
 透镜不做栏体裁剪，所以按住时玻璃、模糊、描边与光晕会一起溢出胶囊；松手后再由 `selectTab` 收回 1.0 并完成切页。
 
-缩放只影响视觉层，不改变布局；按下时的触摸目标已被捕获，松手后由 `TouchType.Up` 统一提交标签切换（`onClick` 作为点击 / 无障碍兜底，320ms 去重），因此长按后松手也能正常切页。
+缩放只影响视觉层，不改变布局；按下时的触摸目标已被捕获，松手后由 `TouchType.Up` 统一提交标签切换。触控结束后的尾随 `onClick` 通过 `touchActive / lastTouchEnd` 忽略，避免把标签改回原来的 index；无障碍点击仍走 `onClick`。
 
-### 6.4 真实背景采样
+### 6.4 跟手流动
+
+按下后，气泡不再停在当前标签，而是滑到手指下方；`Move` 时直接跟随，不做标签吸附：
+
+```ts
+// 手指在导航栏内的横坐标（触摸点在 TabItem 内的 x + 该 Tab 的偏移）
+const barX = this.tabW() * index + touch.x;
+// 气泡中心对准手指，并限制在栏内
+this.bubbleX = Math.max(0, Math.min(
+  this.barW - this.bubbleW(),
+  barX - this.bubbleW() / 2
+));
+```
+
+- 四个 `TabItem` 按到气泡中心的距离放大（`itemMagnify`），所以气泡滑过时导航栏图标/文字会连续鼓起；
+- 页面内容不参与任何缩放；
+- 松手时按气泡中心找最近标签，由 `selectTab` 弹到该标签；
+- 纵向拖出栏外超过 60 vp 视为取消，气泡回到当前选中标签。
+
+![气泡跟手流动](screenshots/bar-drag.jpg)
+
+### 6.5 真实背景采样
 
 `backgroundEffect` 是真正的“取背后内容并模糊”，不是半透明遮罩。因此：
 
@@ -260,7 +282,7 @@ ui.animateTo({ duration: 360, curve: curves.springMotion(0.42, 0.86) }, () => {
 
 这也是为什么演示页特意做了一张**大面积高饱和的收尾卡片**：把它滑到栏下，玻璃的取色和模糊会非常明显。
 
-### 6.5 滚动与安全区
+### 6.6 滚动与安全区
 
 - 页面用 `setWindowLayoutFullScreen(true)` 进入沉浸式。
 - 通过 `window.getWindowAvoidArea()` 取状态栏 / 导航条高度，分别控制顶部留白和胶囊栏的底部距离。
