@@ -32,7 +32,6 @@ export struct LiquidTabBar {
   @State private glow: number = 0;
   @State private pressed: number = -1;
   @State private bubbleX: number = 5;
-  @State private barScale: number = 1;
   private barH: number = BAR_HEIGHT;
   private tapSeq: number = 0;
   private downX: number = 0;
@@ -109,12 +108,6 @@ export struct LiquidTabBar {
     const ui = this.getUIContext();
     ui.animateTo({ duration: 200, curve: Curve.EaseOut }, () => {
       this.pressed = -1;
-    });
-    ui.animateTo({
-      duration: 360,
-      curve: curves.springMotion(0.42, 0.86)
-    }, () => {
-      this.barScale = 1;
     });
     if (resetLens) {
       ui.animateTo({
@@ -198,15 +191,9 @@ export struct LiquidTabBar {
         // Cancel any pending collapse from the previous tap.
         this.tapSeq++;
 
-        // The tab itself dips, while the whole glass bar takes a slow breath.
+        // The tab itself dips; the bar body stays put.
         ui.animateTo({ duration: 130, curve: Curve.EaseOut }, () => {
           this.pressed = index;
-        });
-        ui.animateTo({
-          duration: 260,
-          curve: curves.springMotion(0.32, 0.78)
-        }, () => {
-          this.barScale = 1.05;
         });
         // Glide the lens under the finger, then let it swell.
         const barX: number = this.tabW() * index + (p ? p.x : this.tabW() / 2);
@@ -418,7 +405,6 @@ export struct LiquidTabBar {
     }
     .width(this.barW)
     .height(this.barH)
-    .scale({ x: this.barScale, y: this.barScale })
     .hitTestBehavior(HitTestMode.Default)
   }
 }
