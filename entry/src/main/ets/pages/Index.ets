@@ -362,9 +362,9 @@ struct Index {
 
       this.SectionTitle('材质拆解', 'MATERIAL')
       Row({ space: 9 }) {
-        this.StatCard('26vp', '背景模糊', '#0A84FF')
+        this.StatCard('30vp', '背景模糊', '#0A84FF')
         this.StatCard('1px', '镜面描边', '#FF6B8A')
-        this.StatCard('55%', '顶部白霜', '#8A5CFF')
+        this.StatCard('85%', '顶部白霜', '#8A5CFF')
       }
       .width('100%')
 
@@ -428,7 +428,7 @@ struct Index {
         .hitTestBehavior(HitTestMode.None)
 
       LiquidTabBar({ selected: $selected })
-        .margin({ bottom: this.safeBottom + 8 })
+        .margin({ bottom: Math.max(17, this.safeBottom - 17) })
     }
     .width('100%')
     .height('100%')

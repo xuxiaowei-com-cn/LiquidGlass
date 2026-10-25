@@ -2,10 +2,12 @@ import { curves, display } from '@kit.ArkUI';
 import { GlassRim } from './GlassRim';
 
 const TAB_COUNT: number = 4;
-const BAR_HEIGHT: number = 60;
+const BAR_HEIGHT: number = 62;
 const SIDE_MARGIN: number = 22;
-const ITEM_GAP: number = 10;
+const LENS_HEIGHT: number = 51;
+const LENS_INSET_X: number = 2;
 const UNSELECTED_INK: string = '#141418';
+const LABEL_INK: string = '#1D1D1F';
 const SELECTED_BLUE: string = '#0A84FF';
 
 /**
@@ -13,13 +15,19 @@ const SELECTED_BLUE: string = '#0A84FF';
  * shown in the reference recording.
  *
  * Layers, bottom to top:
- *   1. bloom halo          – soft light that escapes the bar while a tab is hit
- *   2. glass base          – real backdrop blur + a white "thickness" gradient
- *                            that is milky at the top and clear at the bottom
- *   3. glass rim           – 1px specular edge, lower reflected line, sheen
- *   4. selection lens      – a clear, slightly darker glass capsule with a
- *                            chromatic rim; it inflates and springs to the
- *                            tapped item
+ *   1. glass base          – real backdrop blur + a white "thickness" gradient
+ *                            that is frosty only along the top lip, clear in
+ *                            the middle and faintly reflective at the bottom
+ *   2. glass rim           – dark contact line + thin specular edge + bottom
+ *                            reflection; the white highlight is only hot on
+ *                            the top/bottom lips, so it reads as polished glass
+ *                            rather than a painted border
+ *   3. lens shadow         – a separate capsule that casts the soft shadow the
+ *                            settled lens leaves on the bar
+ *   4. selection lens      – a wide, shallow capsule (51 × tab width) that is
+ *                            a calm smoked-glass pill at rest and a clear,
+ *                            chromatic lens while it is being touched or is
+ *                            travelling
  *   5. icons + labels      – crisp, always on top of the glass
  *   6. lens tint           – a tab's glyphs blend toward the selection colour
  *                            as the travelling lens reaches it, as if the glass
@@ -32,7 +40,7 @@ export struct LiquidTabBar {
   @State private barW: number = 342;
   @State private bloomX: number = 1;
   @State private bloomY: number = 1;
-  @State private glow: number = 0;
+  @State private lensActive: number = 0;
   @State private pressed: number = -1;
   @State private bubbleX: number = 5;
   private barH: number = BAR_HEIGHT;
@@ -52,7 +60,7 @@ export struct LiquidTabBar {
     } catch (err) {
       this.barW = 342;
     }
-    this.bubbleX = this.tabW() * this.selected + ITEM_GAP / 2;
+    this.bubbleX = this.tabW() * this.selected + LENS_INSET_X;
   }
 
   private tabW(): number {
@@ -60,11 +68,11 @@ export struct LiquidTabBar {
   }
 
   private bubbleW(): number {
-    return this.tabW() - ITEM_GAP;
+    return this.tabW() - LENS_INSET_X * 2;
   }
 
   private bubbleH(): number {
-    return this.barH - 10;
+    return LENS_HEIGHT;
   }
 
   /**
@@ -117,8 +125,8 @@ export struct LiquidTabBar {
     const distance: number = Math.abs(itemCenter - bubbleCenter);
     const radius: number = this.tabW() * 1.5;
     const influence: number = Math.max(0, 1 - distance / radius);
-    const bloom: number = Math.max(0, Math.min(1, (this.bloomX - 1) / 0.45));
-    return 1 + influence * bloom * 0.34;
+    const bloom: number = Math.max(0, Math.min(1, (this.bloomX - 1) / 0.32));
+    return 1 + influence * bloom * 0.22;
   }
 
   private clampBubbleX(x: number): number {
@@ -130,19 +138,40 @@ export struct LiquidTabBar {
     return Math.max(0, Math.min(TAB_COUNT - 1, raw));
   }
 
+  /** The lens turns clear and prismatic as soon as it is touched. */
+  private wakeLens(): void {
+    this.lensActive = 1;
+  }
+
+  /**
+   * After the lens has landed it slowly settles back into the calm smoked
+   * capsule the reference shows at rest.
+   */
+  private fadeLens(seq: number, delay: number): void {
+    setTimeout(() => {
+      if (seq !== this.tapSeq) {
+        return;
+      }
+      this.getUIContext().animateTo({ duration: 680, curve: Curve.EaseOut }, () => {
+        this.lensActive = 0;
+      });
+    }, delay);
+  }
+
   private settleBloom(seq: number): void {
     setTimeout(() => {
       if (seq !== this.tapSeq) {
         return;
       }
       this.getUIContext().animateTo({
-        duration: 520,
+        duration: 560,
         curve: curves.springMotion(0.52, 0.82)
       }, () => {
         this.bloomX = 1;
         this.bloomY = 1;
-        this.glow = 0;
       });
+      // keep the hot rim through the landing, then let it cool down
+      this.fadeLens(seq, 330);
     }, 150);
   }
 
@@ -152,15 +181,16 @@ export struct LiquidTabBar {
       this.pressed = -1;
     });
     if (resetLens) {
+      const seq: number = this.tapSeq;
       ui.animateTo({
-        duration: 380,
+        duration: 420,
         curve: curves.springMotion(0.46, 0.84)
       }, () => {
         this.bloomX = 1;
         this.bloomY = 1;
-        this.glow = 0;
-        this.bubbleX = this.tabW() * this.selected + ITEM_GAP / 2;
+        this.bubbleX = this.tabW() * this.selected + LENS_INSET_X;
       });
+      this.fadeLens(seq, 300);
     }
   }
 
@@ -172,11 +202,11 @@ export struct LiquidTabBar {
       this.tapSeq++;
       const seq: number = this.tapSeq;
       const ui = this.getUIContext();
-      const homeX: number = this.tabW() * index + ITEM_GAP / 2;
+      const homeX: number = this.tabW() * index + LENS_INSET_X;
+      this.wakeLens();
       ui.animateTo({ duration: 170, curve: Curve.EaseOut }, () => {
-        this.bloomX = 1.35;
-        this.bloomY = 1.35;
-        this.glow = 0.95;
+        this.bloomX = 1.34;
+        this.bloomY = 1.34;
       });
       ui.animateTo({
         duration: 420,
@@ -191,16 +221,16 @@ export struct LiquidTabBar {
     this.tapSeq++;
     const seq: number = this.tapSeq;
     const ui = this.getUIContext();
-    const targetX: number = this.tabW() * index + ITEM_GAP / 2;
+    const targetX: number = this.tabW() * index + LENS_INSET_X;
 
     // Update the active page immediately (a hard cut avoids muddy in-between
     // colours while the gradient changes), then let the lens travel.
     this.selected = index;
+    this.wakeLens();
 
     ui.animateTo({ duration: 170, curve: Curve.EaseOut }, () => {
-      this.bloomX = 1.35;
-      this.bloomY = 1.35;
-      this.glow = 0.95;
+      this.bloomX = 1.34;
+      this.bloomY = 1.34;
     });
     ui.animateTo({
       duration: 640,
@@ -219,16 +249,16 @@ export struct LiquidTabBar {
    */
   @Builder
   TabContent(index: number, label: string, icon: Resource) {
-    Column({ space: 3 }) {
+    Column({ space: 4 }) {
       Image(icon)
-        .width(23)
-        .height(23)
+        .width(20)
+        .height(20)
         .fillColor(this.tabColor(index, UNSELECTED_INK))
         .objectFit(ImageFit.Contain)
       Text(label)
         .fontSize(10)
         .fontWeight(this.selected === index ? FontWeight.Medium : FontWeight.Regular)
-        .fontColor(this.tabColor(index, '#3A3A3E'))
+        .fontColor(this.tabColor(index, LABEL_INK))
         .maxLines(1)
     }
     .width('100%')
@@ -257,6 +287,7 @@ export struct LiquidTabBar {
 
         // Cancel any pending collapse from the previous tap.
         this.tapSeq++;
+        this.wakeLens();
 
         // The tab itself dips; the bar body stays put.
         ui.animateTo({ duration: 130, curve: Curve.EaseOut }, () => {
@@ -271,15 +302,15 @@ export struct LiquidTabBar {
           duration: 320,
           curve: curves.springMotion(0.34, 0.7)
         }, () => {
-          this.bloomX = 1.45;
-          this.bloomY = 1.45;
-          this.glow = 1;
+          this.bloomX = 1.38;
+          this.bloomY = 1.38;
         });
       } else if (event.type === TouchType.Move) {
         const t = event.touches[0];
         if (t) {
           const barX: number = this.tabW() * index + t.x;
           this.bubbleX = this.clampBubbleX(barX - this.bubbleW() / 2);
+          this.wakeLens();
 
           const dx: number = t.x - this.downX;
           const dy: number = t.y - this.downY;
@@ -325,22 +356,7 @@ export struct LiquidTabBar {
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
       // ---------------------------------------------------------------
-      // 1. bloom halo (behind everything, so only its outside part shows)
-      // ---------------------------------------------------------------
-      Image($r('app.media.glow_white'))
-        .width(this.tabW() * 2.0)
-        .height(this.bubbleH() * 1.8)
-        .objectFit(ImageFit.Fill)
-        .interpolation(ImageInterpolation.High)
-        .position({
-          x: this.bubbleX + this.bubbleW() / 2 - this.tabW(),
-          y: this.barH / 2 - this.bubbleH() * 0.9
-        })
-        .opacity(this.glow * 0.62)
-        .hitTestBehavior(HitTestMode.None)
-
-      // ---------------------------------------------------------------
-      // 2 + 3. the glass base
+      // 1 + 2. the glass base
       // ---------------------------------------------------------------
       Stack() {
         // real-time backdrop blur + vibrancy
@@ -348,24 +364,31 @@ export struct LiquidTabBar {
           .width('100%')
           .height('100%')
           .backgroundEffect({
-            radius: 26,
-            saturation: 2.0,
+            radius: 30,
+            saturation: 1.9,
             brightness: 1.06
           })
 
-        // "thickness": frosty top, clear middle, reflective bottom lip
+        // "thickness": a narrow frosty top lip, a clear body and a faint
+        // reflective bottom lip. Keeping most of the body clear is what lets
+        // the colour of the page show through the glass.
         Column()
           .width('100%')
           .height('100%')
           .linearGradient({
             angle: 180,
             colors: [
-              ['#8CFFFFFF', 0],
-              ['#3DFFFFFF', 0.09],
-              ['#08FFFFFF', 0.28],
-              ['#00FFFFFF', 0.60],
-              ['#08FFFFFF', 0.86],
-              ['#24FFFFFF', 1]
+              ['#D9FFFFFF', 0],
+              ['#C2FFFFFF', 0.04],
+              ['#9EFFFFFF', 0.08],
+              ['#7AFFFFFF', 0.12],
+              ['#4DFFFFFF', 0.18],
+              ['#2EFFFFFF', 0.24],
+              ['#1CFFFFFF', 0.32],
+              ['#12FFFFFF', 0.45],
+              ['#0FFFFFFF', 0.62],
+              ['#17FFFFFF', 0.82],
+              ['#42FFFFFF', 1]
             ]
           })
 
@@ -373,55 +396,103 @@ export struct LiquidTabBar {
         Column()
           .width('100%')
           .height('100%')
-          .backgroundColor('#0A8FA8C8')
+          .backgroundColor('#068FA8C8')
 
         GlassRim({
           rimW: this.barW,
           rimH: this.barH,
           rimR: this.barH / 2,
+          strength: 1,
+          darkEdge: 0.13,
           chromatic: false,
-          sheen: 0.8
+          sheen: 0.34,
+          glint: 0
         })
       }
       .width('100%')
       .height('100%')
       .borderRadius(this.barH / 2)
       .clip(true)
-      .shadow({ radius: 20, color: '#14000000', offsetX: 0, offsetY: 9 })
+      .shadow({ radius: 14, color: '#0E000000', offsetX: 0, offsetY: 6 })
+
+      // ---------------------------------------------------------------
+      // 3. shadow cast by the lens on the bar (and beyond it when the
+      //    lens swells past the bar edges)
+      // ---------------------------------------------------------------
+      Column()
+        .width(this.bubbleW())
+        .height(this.bubbleH())
+        .borderRadius(this.bubbleH() / 2)
+        .backgroundColor('#01000000')
+        .shadow({ radius: 7, color: '#15000000', offsetX: 0, offsetY: 4 })
+        .position({ x: 0, y: (this.barH - this.bubbleH()) / 2 })
+        .translate({ x: this.bubbleX })
+        .scale({ x: this.bloomX, y: this.bloomY })
+        .hitTestBehavior(HitTestMode.None)
+
+      // the lens lifts off the bar while it is hot, casting a wider shadow
+      Column()
+        .width(this.bubbleW())
+        .height(this.bubbleH())
+        .borderRadius(this.bubbleH() / 2)
+        .backgroundColor('#01000000')
+        .shadow({ radius: 15, color: '#28000000', offsetX: 0, offsetY: 7 })
+        .position({ x: 0, y: (this.barH - this.bubbleH()) / 2 })
+        .translate({ x: this.bubbleX })
+        .scale({ x: this.bloomX, y: this.bloomY })
+        .opacity(this.lensActive)
+        .hitTestBehavior(HitTestMode.None)
 
       // ---------------------------------------------------------------
       // 4. the selection lens — it intentionally swells beyond the bar
       // ---------------------------------------------------------------
       Stack() {
         Stack() {
+          // clear glass body: a touch of extra blur over the bar's blur
           Column()
             .width('100%')
             .height('100%')
             .backgroundEffect({
-              radius: 9,
-              saturation: 1.28,
-              brightness: 1.02
+              radius: 12,
+              saturation: 1.08,
+              brightness: 1.01
             })
 
-          // clear lens body, very slightly smoked
+          // smoked base, the calm grey pill the reference shows at rest
           Column()
             .width('100%')
             .height('100%')
-            .backgroundColor('#10000000')
+            .backgroundColor('#11000000')
 
+          // thickness: a slightly darker top lip and lower lip
           Column()
             .width('100%')
             .height('100%')
             .linearGradient({
               angle: 180,
               colors: [
-                ['#47FFFFFF', 0],
-                ['#12FFFFFF', 0.22],
-                ['#00FFFFFF', 0.56],
-                ['#12FFFFFF', 0.84],
-                ['#38FFFFFF', 1]
+                ['#0A000000', 0],
+                ['#00000000', 0.36],
+                ['#02000000', 0.66],
+                ['#08000000', 1]
               ]
             })
+
+          // while hot: the clear, bright glass sheen
+          Column()
+            .width('100%')
+            .height('100%')
+            .linearGradient({
+              angle: 180,
+              colors: [
+                ['#52FFFFFF', 0],
+                ['#1CFFFFFF', 0.20],
+                ['#00FFFFFF', 0.58],
+                ['#10FFFFFF', 0.86],
+                ['#33FFFFFF', 1]
+              ]
+            })
+            .opacity(this.lensActive)
 
           // inner bottom shade = glass thickness
           Column()
@@ -430,32 +501,56 @@ export struct LiquidTabBar {
             .linearGradient({
               angle: 0,
               colors: [
-                ['#1A000000', 0],
-                ['#00000000', 0.32]
+                ['#1C000000', 0],
+                ['#00000000', 0.36]
               ]
             })
-        }
-        .width('100%')
-        .height('100%')
-        .hitTestBehavior(HitTestMode.None)
+            .opacity(0.35 + this.lensActive * 0.65)
 
-        Stack() {
-          GlassRim({
-            rimW: this.bubbleW(),
-            rimH: this.bubbleH(),
-            rimR: this.bubbleH() / 2,
-            chromatic: true,
-            sheen: 0.36
-          })
+          // rest rim: quiet, no dispersion
+          Stack() {
+            GlassRim({
+              rimW: this.bubbleW(),
+              rimH: this.bubbleH(),
+              rimR: this.bubbleH() / 2,
+              strength: 0.12,
+              darkEdge: 0.13,
+              chromatic: false,
+              sheen: 0,
+              glint: 0
+            })
+          }
+          .width('100%')
+          .height('100%')
+          .hitTestBehavior(HitTestMode.None)
+
+          // hot rim: bright specular + cyan/amber dispersion
+          Stack() {
+            GlassRim({
+              rimW: this.bubbleW(),
+              rimH: this.bubbleH(),
+              rimR: this.bubbleH() / 2,
+              strength: 1,
+              darkEdge: 0.06,
+              chromatic: true,
+              sheen: 0.55,
+              glint: 1
+            })
+          }
+          .width('100%')
+          .height('100%')
+          .opacity(this.lensActive)
+          .hitTestBehavior(HitTestMode.None)
         }
         .width('100%')
         .height('100%')
+        .borderRadius(this.bubbleH() / 2)
+        .clip(true)
         .hitTestBehavior(HitTestMode.None)
       }
       .width(this.bubbleW())
       .height(this.bubbleH())
       .borderRadius(this.bubbleH() / 2)
-      .clip(true)
       .position({ x: 0, y: (this.barH - this.bubbleH()) / 2 })
       .translate({ x: this.bubbleX })
       .scale({ x: this.bloomX, y: this.bloomY })
