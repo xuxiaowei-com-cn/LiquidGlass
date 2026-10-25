@@ -80,6 +80,19 @@ export struct LiquidTabBar {
   }
 
   /**
+   * Vertical scale of the lens and its shadows.
+   *
+   * The bubble blooms 1.34x / 1.38x while it is hot, and the hot lens is
+   * another 2 vp taller on top of that bloom. The extra 2 vp is expressed as
+   * a scale (2 / LENS_HEIGHT) rather than as an animated layout height so the
+   * Canvas rim can stay exactly as crisp as it is at rest: GlassRim paints
+   * once for a 51 vp capsule and afterwards is only transformed.
+   */
+  private lensScaleY(): number {
+    return this.bloomY + this.lensActive * (2 / LENS_HEIGHT);
+  }
+
+  /**
    * How strongly the travelling lens colours a tab (0 = ink, 1 = selection
    * blue). The glyph colour follows the glass, not the committed page: only
    * the tab whose icon/label is actually covered by the lens is blue. As soon
@@ -256,12 +269,12 @@ export struct LiquidTabBar {
   TabContent(index: number, label: string, icon: Resource) {
     Column({ space: 4 }) {
       Image(icon)
-        .width(20)
-        .height(20)
+        .width(22)
+        .height(22)
         .fillColor(this.tabColor(index, UNSELECTED_INK))
         .objectFit(ImageFit.Contain)
       Text(label)
-        .fontSize(10)
+        .fontSize(12)
         .fontWeight(this.selected === index ? FontWeight.Medium : FontWeight.Regular)
         .fontColor(this.tabColor(index, LABEL_INK))
         .maxLines(1)
@@ -426,7 +439,7 @@ export struct LiquidTabBar {
         .shadow({ radius: 7, color: '#15000000', offsetX: 0, offsetY: 4 })
         .position({ x: 0, y: (this.barH - this.bubbleH()) / 2 })
         .translate({ x: this.bubbleX })
-        .scale({ x: this.bloomX, y: this.bloomY })
+        .scale({ x: this.bloomX, y: this.lensScaleY() })
         .hitTestBehavior(HitTestMode.None)
 
       // the lens lifts off the bar while it is hot, casting a wider shadow
@@ -438,7 +451,7 @@ export struct LiquidTabBar {
         .shadow({ radius: 15, color: '#28000000', offsetX: 0, offsetY: 7 })
         .position({ x: 0, y: (this.barH - this.bubbleH()) / 2 })
         .translate({ x: this.bubbleX })
-        .scale({ x: this.bloomX, y: this.bloomY })
+        .scale({ x: this.bloomX, y: this.lensScaleY() })
         .opacity(this.lensActive)
         .hitTestBehavior(HitTestMode.None)
 
@@ -542,7 +555,7 @@ export struct LiquidTabBar {
       .borderRadius(this.bubbleH() / 2)
       .position({ x: 0, y: (this.barH - this.bubbleH()) / 2 })
       .translate({ x: this.bubbleX })
-      .scale({ x: this.bloomX, y: this.bloomY })
+      .scale({ x: this.bloomX, y: this.lensScaleY() })
       .hitTestBehavior(HitTestMode.None)
 
       // ---------------------------------------------------------------
