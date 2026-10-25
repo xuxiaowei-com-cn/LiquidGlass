@@ -140,8 +140,8 @@ export struct LiquidTabBar {
   TabItem(index: number, label: string, icon: Resource) {
     Column({ space: 3 }) {
       Image(icon)
-        .width(20)
-        .height(20)
+        .width(23)
+        .height(23)
         .fillColor(this.selected === index ? SELECTED_BLUE : UNSELECTED_INK)
         .objectFit(ImageFit.Contain)
       Text(label)
