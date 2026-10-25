@@ -2,15 +2,15 @@
   "string": [
     {
       "name": "module_desc",
-      "value": "module description"
+      "value": "液态玻璃导航栏演示"
     },
     {
       "name": "EntryAbility_desc",
-      "value": "description"
+      "value": "iOS 27 风格液态玻璃底部导航栏"
     },
     {
       "name": "EntryAbility_label",
-      "value": "label"
+      "value": "液态玻璃"
     }
   ]
 }

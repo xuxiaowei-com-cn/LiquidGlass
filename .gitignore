@@ -10,3 +10,16 @@
 /.clang-tidy
 **/.test
 /.appanalyzer
+
+.DS_Store
+
+/.arkui-x/android/.gradle/
+/.arkui-x/android/.idea/
+/.arkui-x/android/app/libs/
+/.arkui-x/android/app/src/main/assets/arkui-x/
+/.arkui-x/android/gradle/gradle-daemon-jvm.properties
+
+/.arkui-x/ios/app.xcodeproj/project.xcworkspace/xcuserdata/
+/.arkui-x/ios/app.xcodeproj/xcuserdata/
+/.arkui-x/ios/arkui-x/
+/.arkui-x/ios/frameworks/

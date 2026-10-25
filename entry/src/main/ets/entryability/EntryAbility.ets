@@ -17,6 +17,22 @@ export default class EntryAbility extends UIAbility {
     // Main window is created, set main page for this ability
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onWindowStageCreate');
 
+    const win = windowStage.getMainWindowSync();
+    try {
+      win.setWindowLayoutFullScreen(true);
+      win.setWindowSystemBarEnable(['status']).catch(() => {
+        hilog.warn(DOMAIN, 'testTag', 'Failed to hide the navigation bar.');
+      });
+      win.setWindowSystemBarProperties({
+        statusBarColor: '#00000000',
+        statusBarContentColor: '#000000',
+        navigationBarColor: '#00000000',
+        navigationBarContentColor: '#000000'
+      });
+    } catch (err) {
+      hilog.warn(DOMAIN, 'testTag', 'Failed to enable immersive layout.');
+    }
+
     windowStage.loadContent('pages/Index', (err) => {
       if (err.code) {
         hilog.error(DOMAIN, 'testTag', 'Failed to load the content. Cause: %{public}s', JSON.stringify(err));
