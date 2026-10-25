@@ -1,18 +1,14 @@
 import { window } from '@kit.ArkUI';
-import { image } from '@kit.ImageKit';
 import { AuroraBackground } from '../components/AuroraBackground';
 import { LiquidTabBar } from '../components/LiquidTabBar';
 
 @Entry
 @Component
 struct Index {
-  @State @Watch('onSelectedChanged') selected: number = 0;
+  @State selected: number = 0;
   @State safeTop: number = 28;
   @State safeBottom: number = 10;
-  @State pageSnap: image.PixelMap | undefined = undefined;
-  @State showEdgeLens: boolean = false;
   private scroller: Scroller = new Scroller();
-  private snapSeq: number = 0;
 
   private tabTitles: string[] = ['Today', '游戏', 'App', '搜索'];
   private kickers: string[] = ['LIQUID GLASS', 'PLAY', 'DISCOVER', 'FIND'];
@@ -59,46 +55,6 @@ struct Index {
         // keep fallbacks
       }
     });
-
-    setTimeout(() => {
-      this.capturePageSnapshot();
-    }, 700);
-  }
-
-  /** Refresh the edge snapshot when the tab's content changes. */
-  private onSelectedChanged(): void {
-    this.showEdgeLens = false;
-    setTimeout(() => {
-      this.capturePageSnapshot();
-    }, 260);
-  }
-
-  /** Capture the scroll content for the bar's edge perspective strips. */
-  private capturePageSnapshot(): void {
-    const seq: number = ++this.snapSeq;
-    try {
-      this.getUIContext().getComponentSnapshot().get('pageScroll').then((pixelMap: image.PixelMap) => {
-        if (seq !== this.snapSeq) {
-          return;
-        }
-        const previous: image.PixelMap | undefined = this.pageSnap;
-        this.pageSnap = pixelMap;
-        this.showEdgeLens = true;
-        if (previous !== undefined) {
-          setTimeout(() => {
-            try {
-              previous.release();
-            } catch (err) {
-              // already released
-            }
-          }, 1000);
-        }
-      }).catch(() => {
-        this.showEdgeLens = false;
-      });
-    } catch (err) {
-      this.showEdgeLens = false;
-    }
   }
 
   @Builder
@@ -472,15 +428,6 @@ struct Index {
       .edgeEffect(EdgeEffect.Spring)
       .width('100%')
       .height('100%')
-      .id('pageScroll')
-      .onScroll(() => {
-        this.showEdgeLens = false;
-      })
-      .onScrollStop(() => {
-        setTimeout(() => {
-          this.capturePageSnapshot();
-        }, 120);
-      })
 
       // keep the status bar readable while content slides underneath
       Column()
@@ -497,12 +444,7 @@ struct Index {
         .position({ x: 0, y: 0 })
         .hitTestBehavior(HitTestMode.None)
 
-      LiquidTabBar({
-        selected: $selected,
-        pageSnap: $pageSnap,
-        showEdgeLens: $showEdgeLens,
-        bottomMargin: Math.max(17, this.safeBottom - 17)
-      })
+      LiquidTabBar({ selected: $selected })
         .margin({ bottom: Math.max(17, this.safeBottom - 17) })
     }
     .width('100%')

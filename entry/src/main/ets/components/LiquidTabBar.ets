@@ -1,5 +1,4 @@
 import { curves, display } from '@kit.ArkUI';
-import { image } from '@kit.ImageKit';
 import { GlassRim } from './GlassRim';
 
 const TAB_COUNT: number = 4;
@@ -8,6 +7,8 @@ const SIDE_MARGIN: number = 22;
 const LENS_HEIGHT: number = 51;
 const LENS_INSET_X: number = 5.5;
 const TAB_CONTENT_HALF: number = 15;
+/** The bar's glass body: 85% light grey, so ~15% of the page shows through. */
+const BAR_GLASS: string = '#D9F0F0F0';
 const UNSELECTED_INK: string = '#141418';
 const LABEL_INK: string = '#1D1D1F';
 const SELECTED_BLUE: string = '#0A84FF';
@@ -20,9 +21,7 @@ const SELECTED_BLUE: string = '#0A84FF';
  *   1. glass base          – a translucent light-grey fill + a white
  *                            "thickness" gradient that is frosty only along the
  *                            top lip, clear in the middle and faintly
- *                            reflective at the bottom; the top/bottom 12 vp
- *                            additionally carry snapshot-based perspective
- *                            strips (only while the page is still)
+ *                            reflective at the bottom
  *   2. glass rim           – dark contact line + thin specular edge + bottom
  *                            reflection; the white highlight is only hot on
  *                            the top/bottom lips, so it reads as polished glass
@@ -42,9 +41,6 @@ const SELECTED_BLUE: string = '#0A84FF';
 @Component
 export struct LiquidTabBar {
   @Link selected: number;
-  @Link @Watch('onEdgeChanged') pageSnap: image.PixelMap | undefined;
-  @Link @Watch('onEdgeChanged') showEdgeLens: boolean;
-  @Prop bottomMargin: number = 17;
   @State private barW: number = 342;
   @State private bloomX: number = 1;
   @State private bloomY: number = 1;
@@ -57,8 +53,6 @@ export struct LiquidTabBar {
   private downY: number = 0;
   private touchActive: boolean = false;
   private lastTouchEnd: number = 0;
-  private topCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
-  private bottomCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
 
   aboutToAppear(): void {
     try {
@@ -71,30 +65,6 @@ export struct LiquidTabBar {
       this.barW = 342;
     }
     this.bubbleX = this.tabW() * this.selected + LENS_INSET_X;
-  }
-
-  private pageW(): number {
-    try {
-      return this.getUIContext().px2vp(display.getDefaultDisplaySync().width);
-    } catch (err) {
-      return this.barW + SIDE_MARGIN * 2;
-    }
-  }
-
-  private pageH(): number {
-    try {
-      return this.getUIContext().px2vp(display.getDefaultDisplaySync().height);
-    } catch (err) {
-      return 900;
-    }
-  }
-
-  private pageLeft(): number {
-    return (this.pageW() - this.barW) / 2;
-  }
-
-  private pageTop(): number {
-    return this.pageH() - this.bottomMargin - this.barH;
   }
 
   private tabW(): number {
@@ -388,61 +358,6 @@ export struct LiquidTabBar {
     .accessibilityText(label)
   }
 
-  private onEdgeChanged(): void {
-    this.drawEdge(true);
-    this.drawEdge(false);
-  }
-
-  private drawEdge(isTop: boolean): void {
-    const ctx: CanvasRenderingContext2D = isTop ? this.topCtx : this.bottomCtx;
-    const h: number = 12;
-    try {
-      ctx.clearRect(0, 0, this.barW, h);
-      if (this.pageSnap === undefined || !this.showEdgeLens) {
-        return;
-      }
-      const d: number = this.getUIContext().vp2px(1);
-      const sx: number = this.pageLeft() * d;
-      const sw: number = this.barW * d;
-      const bandTop: number = isTop ? this.pageTop() : this.pageTop() + this.barH - h;
-      const sy: number = bandTop * d;
-      const sh: number = h * d;
-      const zoom: number = 0.70;
-      const rows: number = 24;
-      const srcSpan: number = sh / zoom;
-      for (let i = 0; i < rows; i++) {
-        // i = 0 is the outer rim, i = rows - 1 is the inner edge
-        const srcTop: number = isTop ? sy + sh - srcSpan : sy;
-        const srcY: number = srcTop + (i / rows) * srcSpan;
-        const srcH: number = srcSpan / rows;
-        const edgeT: number = isTop ? (1 - i / rows) : (i / rows);
-        const xScale: number = 1 - 0.10 * edgeT;
-        const dw: number = this.barW * xScale;
-        const dx: number = (this.barW - dw) / 2;
-        const dh: number = 12 / rows;
-        ctx.drawImage(this.pageSnap, sx, srcY, sw, srcH, dx, i * dh, dw, dh);
-      }
-      // keep the edge bands in the same light-grey material as the bar
-      ctx.fillStyle = 'rgba(240, 240, 240, 0.55)';
-      ctx.fillRect(0, 0, this.barW, h);
-    } catch (err) {
-      // snapshot not ready; leave the band clear
-    }
-  }
-
-  @Builder
-  EdgePerspective(isTop: boolean) {
-    Canvas(isTop ? this.topCtx : this.bottomCtx)
-      .width('100%')
-      .height(12)
-      .position({ x: 0, y: isTop ? 0 : this.barH - 12 })
-      .opacity(this.showEdgeLens && this.pageSnap !== undefined ? 1 : 0)
-      .onReady(() => {
-        this.drawEdge(isTop);
-      })
-      .hitTestBehavior(HitTestMode.None)
-  }
-
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
       // ---------------------------------------------------------------
@@ -453,11 +368,7 @@ export struct LiquidTabBar {
         Column()
           .width('100%')
           .height('100%')
-          .backgroundColor('#D9F0F0F0')
-
-        // perspective bands under the frost/rim, so the lips stay crisp
-        this.EdgePerspective(true)
-        this.EdgePerspective(false)
+          .backgroundColor(BAR_GLASS)
 
         // "thickness": a narrow frosty top lip, a clear body and a faint
         // reflective bottom lip. Keeping most of the body clear is what lets
