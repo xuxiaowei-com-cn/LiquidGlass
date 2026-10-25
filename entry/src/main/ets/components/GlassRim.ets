@@ -117,20 +117,20 @@ export struct GlassRim {
 
     // --- chromatic dispersion --------------------------------------------
     if (this.chromatic && s > 0.2) {
-      const dispersion = ctx.createLinearGradient(0, 0, w, h);
-      dispersion.addColorStop(0, `rgba(112,236,255,${0.78 * s})`);
-      dispersion.addColorStop(0.18, `rgba(150,255,246,${0.20 * s})`);
-      dispersion.addColorStop(0.46, 'rgba(255,255,255,0)');
-      dispersion.addColorStop(0.70, `rgba(255,196,255,${0.20 * s})`);
-      dispersion.addColorStop(0.88, `rgba(255,206,138,${0.38 * s})`);
-      dispersion.addColorStop(1, `rgba(255,168,96,${0.70 * s})`);
-      ctx.strokeStyle = dispersion;
+      const fringe = ctx.createLinearGradient(0, 0, w, h);
+      fringe.addColorStop(0, `rgba(112,236,255,${0.78 * s})`);
+      fringe.addColorStop(0.18, `rgba(150,255,246,${0.20 * s})`);
+      fringe.addColorStop(0.46, 'rgba(255,255,255,0)');
+      fringe.addColorStop(0.70, `rgba(255,196,255,${0.20 * s})`);
+      fringe.addColorStop(0.88, `rgba(255,206,138,${0.38 * s})`);
+      fringe.addColorStop(1, `rgba(255,168,96,${0.70 * s})`);
+      ctx.strokeStyle = fringe;
       ctx.lineWidth = 1.05;
       this.roundedPath(1.5, 1.5, w - 3.0, h - 3.0, r - 1.5);
       ctx.stroke();
 
       // a second, wider fringe reads as the light splitting through the glass
-      ctx.strokeStyle = dispersion;
+      ctx.strokeStyle = fringe;
       ctx.lineWidth = 1.9;
       ctx.globalAlpha = 0.30;
       this.roundedPath(2.6, 2.6, w - 5.2, h - 5.2, Math.max(0, r - 2.6));

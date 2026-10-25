@@ -2,8 +2,8 @@
  * AuroraBackground
  *
  * A soft, slowly breathing wallpaper that gives the liquid glass something
- * worth refracting: saturated colour fields, large soft falloffs and plenty of
- * movement behind the bottom bar.
+ * worth seeing through the transparent bar: saturated colour fields, large
+ * soft falloffs and plenty of movement behind it.
  *
  * The colour fields are pre-rendered PNG falloffs instead of runtime gradients
  * so that they stay band-free on every GPU and can be composited cheaply while

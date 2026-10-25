@@ -1,4 +1,5 @@
 import { curves, display } from '@kit.ArkUI';
+import { image } from '@kit.ImageKit';
 import { GlassRim } from './GlassRim';
 
 const TAB_COUNT: number = 4;
@@ -16,9 +17,12 @@ const SELECTED_BLUE: string = '#0A84FF';
  * shown in the reference recording.
  *
  * Layers, bottom to top:
- *   1. glass base          – real backdrop blur + a white "thickness" gradient
- *                            that is frosty only along the top lip, clear in
- *                            the middle and faintly reflective at the bottom
+ *   1. glass base          – a translucent light-grey fill + a white
+ *                            "thickness" gradient that is frosty only along the
+ *                            top lip, clear in the middle and faintly
+ *                            reflective at the bottom; the top/bottom 12 vp
+ *                            additionally carry snapshot-based perspective
+ *                            strips (only while the page is still)
  *   2. glass rim           – dark contact line + thin specular edge + bottom
  *                            reflection; the white highlight is only hot on
  *                            the top/bottom lips, so it reads as polished glass
@@ -38,6 +42,9 @@ const SELECTED_BLUE: string = '#0A84FF';
 @Component
 export struct LiquidTabBar {
   @Link selected: number;
+  @Link @Watch('onEdgeChanged') pageSnap: image.PixelMap | undefined;
+  @Link @Watch('onEdgeChanged') showEdgeLens: boolean;
+  @Prop bottomMargin: number = 17;
   @State private barW: number = 342;
   @State private bloomX: number = 1;
   @State private bloomY: number = 1;
@@ -50,6 +57,8 @@ export struct LiquidTabBar {
   private downY: number = 0;
   private touchActive: boolean = false;
   private lastTouchEnd: number = 0;
+  private topCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
+  private bottomCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
 
   aboutToAppear(): void {
     try {
@@ -62,6 +71,30 @@ export struct LiquidTabBar {
       this.barW = 342;
     }
     this.bubbleX = this.tabW() * this.selected + LENS_INSET_X;
+  }
+
+  private pageW(): number {
+    try {
+      return this.getUIContext().px2vp(display.getDefaultDisplaySync().width);
+    } catch (err) {
+      return this.barW + SIDE_MARGIN * 2;
+    }
+  }
+
+  private pageH(): number {
+    try {
+      return this.getUIContext().px2vp(display.getDefaultDisplaySync().height);
+    } catch (err) {
+      return 900;
+    }
+  }
+
+  private pageLeft(): number {
+    return (this.pageW() - this.barW) / 2;
+  }
+
+  private pageTop(): number {
+    return this.pageH() - this.bottomMargin - this.barH;
   }
 
   private tabW(): number {
@@ -355,21 +388,76 @@ export struct LiquidTabBar {
     .accessibilityText(label)
   }
 
+  private onEdgeChanged(): void {
+    this.drawEdge(true);
+    this.drawEdge(false);
+  }
+
+  private drawEdge(isTop: boolean): void {
+    const ctx: CanvasRenderingContext2D = isTop ? this.topCtx : this.bottomCtx;
+    const h: number = 12;
+    try {
+      ctx.clearRect(0, 0, this.barW, h);
+      if (this.pageSnap === undefined || !this.showEdgeLens) {
+        return;
+      }
+      const d: number = this.getUIContext().vp2px(1);
+      const sx: number = this.pageLeft() * d;
+      const sw: number = this.barW * d;
+      const bandTop: number = isTop ? this.pageTop() : this.pageTop() + this.barH - h;
+      const sy: number = bandTop * d;
+      const sh: number = h * d;
+      const zoom: number = 0.70;
+      const rows: number = 24;
+      const srcSpan: number = sh / zoom;
+      for (let i = 0; i < rows; i++) {
+        // i = 0 is the outer rim, i = rows - 1 is the inner edge
+        const srcTop: number = isTop ? sy + sh - srcSpan : sy;
+        const srcY: number = srcTop + (i / rows) * srcSpan;
+        const srcH: number = srcSpan / rows;
+        const edgeT: number = isTop ? (1 - i / rows) : (i / rows);
+        const xScale: number = 1 - 0.10 * edgeT;
+        const dw: number = this.barW * xScale;
+        const dx: number = (this.barW - dw) / 2;
+        const dh: number = 12 / rows;
+        ctx.drawImage(this.pageSnap, sx, srcY, sw, srcH, dx, i * dh, dw, dh);
+      }
+      // keep the edge bands in the same light-grey material as the bar
+      ctx.fillStyle = 'rgba(240, 240, 240, 0.55)';
+      ctx.fillRect(0, 0, this.barW, h);
+    } catch (err) {
+      // snapshot not ready; leave the band clear
+    }
+  }
+
+  @Builder
+  EdgePerspective(isTop: boolean) {
+    Canvas(isTop ? this.topCtx : this.bottomCtx)
+      .width('100%')
+      .height(12)
+      .position({ x: 0, y: isTop ? 0 : this.barH - 12 })
+      .opacity(this.showEdgeLens && this.pageSnap !== undefined ? 1 : 0)
+      .onReady(() => {
+        this.drawEdge(isTop);
+      })
+      .hitTestBehavior(HitTestMode.None)
+  }
+
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
       // ---------------------------------------------------------------
       // 1 + 2. the glass base
       // ---------------------------------------------------------------
       Stack() {
-        // real-time backdrop blur + vibrancy
+        // translucent light-grey glass body, matching the reference bar
         Column()
           .width('100%')
           .height('100%')
-          .backgroundEffect({
-            radius: 30,
-            saturation: 1.9,
-            brightness: 1.06
-          })
+          .backgroundColor('#D9F0F0F0')
+
+        // perspective bands under the frost/rim, so the lips stay crisp
+        this.EdgePerspective(true)
+        this.EdgePerspective(false)
 
         // "thickness": a narrow frosty top lip, a clear body and a faint
         // reflective bottom lip. Keeping most of the body clear is what lets
@@ -380,17 +468,15 @@ export struct LiquidTabBar {
           .linearGradient({
             angle: 180,
             colors: [
-              ['#D9FFFFFF', 0],
-              ['#C2FFFFFF', 0.04],
-              ['#9EFFFFFF', 0.08],
-              ['#7AFFFFFF', 0.12],
-              ['#4DFFFFFF', 0.18],
-              ['#2EFFFFFF', 0.24],
-              ['#1CFFFFFF', 0.32],
-              ['#12FFFFFF', 0.45],
-              ['#0FFFFFFF', 0.62],
-              ['#17FFFFFF', 0.82],
-              ['#42FFFFFF', 1]
+              ['#0AFFFFFF', 0],
+              ['#08FFFFFF', 0.10],
+              ['#05FFFFFF', 0.22],
+              ['#03FFFFFF', 0.36],
+              ['#02FFFFFF', 0.52],
+              ['#01FFFFFF', 0.66],
+              ['#01FFFFFF', 0.80],
+              ['#02FFFFFF', 0.92],
+              ['#08FFFFFF', 1]
             ]
           })
 
@@ -398,16 +484,16 @@ export struct LiquidTabBar {
         Column()
           .width('100%')
           .height('100%')
-          .backgroundColor('#068FA8C8')
+          .backgroundColor('#018FA8C8')
 
         GlassRim({
           rimW: this.barW,
           rimH: this.barH,
           rimR: this.barH / 2,
-          strength: 1,
-          darkEdge: 0.13,
+          strength: 0.45,
+          darkEdge: 0.02,
           chromatic: false,
-          sheen: 0.34,
+          sheen: 0.03,
           glint: 0
         })
       }
@@ -415,7 +501,7 @@ export struct LiquidTabBar {
       .height('100%')
       .borderRadius(this.barH / 2)
       .clip(true)
-      .shadow({ radius: 14, color: '#0E000000', offsetX: 0, offsetY: 6 })
+      .shadow({ radius: 12, color: '#0A000000', offsetX: 0, offsetY: 6 })
 
       // ---------------------------------------------------------------
       // 3. shadow cast by the lens on the bar (and beyond it when the
@@ -450,21 +536,11 @@ export struct LiquidTabBar {
       // ---------------------------------------------------------------
       Stack() {
         Stack() {
-          // clear glass body: a touch of extra blur over the bar's blur
-          Column()
-            .width('100%')
-            .height('100%')
-            .backgroundEffect({
-              radius: 12,
-              saturation: 1.08,
-              brightness: 1.01
-            })
-
           // smoked base, the calm grey pill the reference shows at rest
           Column()
             .width('100%')
             .height('100%')
-            .backgroundColor('#11000000')
+            .backgroundColor('#0A000000')
 
           // thickness: a slightly darker top lip and lower lip
           Column()

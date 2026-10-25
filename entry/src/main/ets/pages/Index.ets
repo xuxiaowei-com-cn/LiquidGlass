@@ -1,14 +1,18 @@
 import { window } from '@kit.ArkUI';
+import { image } from '@kit.ImageKit';
 import { AuroraBackground } from '../components/AuroraBackground';
 import { LiquidTabBar } from '../components/LiquidTabBar';
 
 @Entry
 @Component
 struct Index {
-  @State selected: number = 0;
+  @State @Watch('onSelectedChanged') selected: number = 0;
   @State safeTop: number = 28;
   @State safeBottom: number = 10;
+  @State pageSnap: image.PixelMap | undefined = undefined;
+  @State showEdgeLens: boolean = false;
   private scroller: Scroller = new Scroller();
+  private snapSeq: number = 0;
 
   private tabTitles: string[] = ['Today', '游戏', 'App', '搜索'];
   private kickers: string[] = ['LIQUID GLASS', 'PLAY', 'DISCOVER', 'FIND'];
@@ -55,6 +59,46 @@ struct Index {
         // keep fallbacks
       }
     });
+
+    setTimeout(() => {
+      this.capturePageSnapshot();
+    }, 700);
+  }
+
+  /** Refresh the edge snapshot when the tab's content changes. */
+  private onSelectedChanged(): void {
+    this.showEdgeLens = false;
+    setTimeout(() => {
+      this.capturePageSnapshot();
+    }, 260);
+  }
+
+  /** Capture the scroll content for the bar's edge perspective strips. */
+  private capturePageSnapshot(): void {
+    const seq: number = ++this.snapSeq;
+    try {
+      this.getUIContext().getComponentSnapshot().get('pageScroll').then((pixelMap: image.PixelMap) => {
+        if (seq !== this.snapSeq) {
+          return;
+        }
+        const previous: image.PixelMap | undefined = this.pageSnap;
+        this.pageSnap = pixelMap;
+        this.showEdgeLens = true;
+        if (previous !== undefined) {
+          setTimeout(() => {
+            try {
+              previous.release();
+            } catch (err) {
+              // already released
+            }
+          }, 1000);
+        }
+      }).catch(() => {
+        this.showEdgeLens = false;
+      });
+    } catch (err) {
+      this.showEdgeLens = false;
+    }
   }
 
   @Builder
@@ -345,6 +389,16 @@ struct Index {
         .fontSize(18)
         .fontColor('#CCFFFFFF')
         .position({ x: 296, y: 34 })
+
+      // large watermark that ends up under the glass when the card is
+      // scrolled to the bottom; it makes the bar's see-through quality
+      // easy to judge
+      Text('LIQUID GLASS')
+        .fontSize(38)
+        .fontWeight(FontWeight.Bold)
+        .fontColor('#D9FFFFFF')
+        .letterSpacing(4)
+        .position({ x: 22, y: 140 })
     }
     .width('100%')
     .height(196)
@@ -362,9 +416,9 @@ struct Index {
 
       this.SectionTitle('材质拆解', 'MATERIAL')
       Row({ space: 9 }) {
-        this.StatCard('30vp', '背景模糊', '#0A84FF')
+        this.StatCard('0vp', '无模糊', '#0A84FF')
         this.StatCard('1px', '镜面描边', '#FF6B8A')
-        this.StatCard('85%', '顶部白霜', '#8A5CFF')
+        this.StatCard('4%', '顶部白霜', '#8A5CFF')
       }
       .width('100%')
 
@@ -385,11 +439,18 @@ struct Index {
       .edgeEffect(EdgeEffect.Spring)
 
       this.SectionTitle('观察要点', 'DETAILS')
-      this.InsightRow('◐', '背景模糊', '滚动页面，导航栏会实时采样并虚化下方的内容', '#3E7BFF')
+      this.InsightRow('◐', '背景透明', '滚动页面，导航栏直接透出下方的内容与文字', '#3E7BFF')
       this.InsightRow('◇', '取色与增饱和', '彩色卡片经过玻璃时，颜色被晕开、提亮并保留', '#FF6B8A')
       this.InsightRow('✧', '边缘折射', '顶部白霜、底部反光与青琥珀色散共同塑造厚度', '#8A5CFF')
 
       this.ClosingCard()
+
+      // repeat the page's hero card once at the very bottom
+      Column() {
+        this.HeroCard()
+      }
+      .width('100%')
+      .margin({ top: 18 })
     }
     .width('100%')
     .padding({
@@ -411,6 +472,15 @@ struct Index {
       .edgeEffect(EdgeEffect.Spring)
       .width('100%')
       .height('100%')
+      .id('pageScroll')
+      .onScroll(() => {
+        this.showEdgeLens = false;
+      })
+      .onScrollStop(() => {
+        setTimeout(() => {
+          this.capturePageSnapshot();
+        }, 120);
+      })
 
       // keep the status bar readable while content slides underneath
       Column()
@@ -427,7 +497,12 @@ struct Index {
         .position({ x: 0, y: 0 })
         .hitTestBehavior(HitTestMode.None)
 
-      LiquidTabBar({ selected: $selected })
+      LiquidTabBar({
+        selected: $selected,
+        pageSnap: $pageSnap,
+        showEdgeLens: $showEdgeLens,
+        bottomMargin: Math.max(17, this.safeBottom - 17)
+      })
         .margin({ bottom: Math.max(17, this.safeBottom - 17) })
     }
     .width('100%')
