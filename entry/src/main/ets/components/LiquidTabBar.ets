@@ -4,7 +4,7 @@ import { GlassRim } from './GlassRim';
 
 const TAB_COUNT: number = 4;
 const BAR_HEIGHT: number = 60;
-const SIDE_MARGIN: number = 16;
+const SIDE_MARGIN: number = 22;
 const ITEM_GAP: number = 10;
 const UNSELECTED_INK: string = '#141418';
 const SELECTED_BLUE: string = '#0A84FF';
@@ -33,6 +33,8 @@ export struct LiquidTabBar {
   @State private pressed: number = -1;
   @State private bubbleX: number = 5;
   @State private barScale: number = 1;
+  @State private lensFill: number = 1;
+  @State private lensRim: number = 1;
   private barH: number = BAR_HEIGHT;
   private tapSeq: number = 0;
   private downX: number = 0;
@@ -64,6 +66,20 @@ export struct LiquidTabBar {
     return this.barH - 10;
   }
 
+  /**
+   * Magnifies only the bar's own icons/labels around the travelling lens.
+   * The page behind the bar is never scaled.
+   */
+  private itemMagnify(index: number): number {
+    const bubbleCenter: number = this.bubbleX + this.bubbleW() / 2;
+    const itemCenter: number = this.tabW() * (index + 0.5);
+    const distance: number = Math.abs(itemCenter - bubbleCenter);
+    const radius: number = this.tabW() * 1.5;
+    const influence: number = Math.max(0, 1 - distance / radius);
+    const bloom: number = Math.max(0, Math.min(1, (this.bloomX - 1) / 0.45));
+    return 1 + influence * bloom * 0.34;
+  }
+
   private settleBloom(seq: number): void {
     setTimeout(() => {
       if (seq !== this.tapSeq) {
@@ -76,11 +92,13 @@ export struct LiquidTabBar {
         this.bloomX = 1;
         this.bloomY = 1;
         this.glow = 0;
+        this.lensFill = 1;
+        this.lensRim = 1;
       });
     }, 150);
   }
 
-  private releasePress(): void {
+  private releasePress(resetLens: boolean): void {
     const ui = this.getUIContext();
     ui.animateTo({ duration: 200, curve: Curve.EaseOut }, () => {
       this.pressed = -1;
@@ -91,11 +109,33 @@ export struct LiquidTabBar {
     }, () => {
       this.barScale = 1;
     });
+    if (resetLens) {
+      ui.animateTo({
+        duration: 380,
+        curve: curves.springMotion(0.46, 0.84)
+      }, () => {
+        this.bloomX = 1;
+        this.bloomY = 1;
+        this.glow = 0;
+        this.lensFill = 1;
+        this.lensRim = 1;
+      });
+    }
   }
 
   private selectTab(index: number): void {
     const now: number = Date.now();
     if (now - this.lastSelectAt < 320) {
+      this.getUIContext().animateTo({
+        duration: 380,
+        curve: curves.springMotion(0.46, 0.84)
+      }, () => {
+        this.bloomX = 1;
+        this.bloomY = 1;
+        this.glow = 0;
+        this.lensFill = 1;
+        this.lensRim = 1;
+      });
       return;
     }
     this.lastSelectAt = now;
@@ -104,10 +144,12 @@ export struct LiquidTabBar {
       // Tapping the active tab gives the lens a small "breath".
       this.tapSeq++;
       const seq: number = this.tapSeq;
-      this.getUIContext().animateTo({ duration: 140, curve: Curve.EaseOut }, () => {
-        this.bloomX = 1.08;
-        this.bloomY = 1.1;
-        this.glow = 0.55;
+      this.getUIContext().animateTo({ duration: 170, curve: Curve.EaseOut }, () => {
+        this.bloomX = 1.35;
+        this.bloomY = 1.35;
+        this.glow = 0.95;
+        this.lensFill = 0.3;
+        this.lensRim = 0.8;
       });
       this.settleBloom(seq);
       return;
@@ -123,9 +165,11 @@ export struct LiquidTabBar {
     this.selected = index;
 
     ui.animateTo({ duration: 170, curve: Curve.EaseOut }, () => {
-      this.bloomX = 1.2;
-      this.bloomY = 1.26;
+      this.bloomX = 1.35;
+      this.bloomY = 1.35;
       this.glow = 0.95;
+      this.lensFill = 0.3;
+      this.lensRim = 0.8;
     });
     ui.animateTo({
       duration: 640,
@@ -154,8 +198,8 @@ export struct LiquidTabBar {
     .height('100%')
     .justifyContent(FlexAlign.Center)
     .scale({
-      x: this.pressed === index ? 0.86 : 1,
-      y: this.pressed === index ? 0.86 : 1
+      x: (this.pressed === index ? 0.95 : 1) * this.itemMagnify(index),
+      y: (this.pressed === index ? 0.95 : 1) * this.itemMagnify(index)
     })
     .onTouch((event: TouchEvent) => {
       const ui = this.getUIContext();
@@ -163,6 +207,9 @@ export struct LiquidTabBar {
         const p = event.touches[0];
         this.downX = p ? p.x : 0;
         this.downY = p ? p.y : 0;
+
+        // Cancel any pending collapse from the previous tap.
+        this.tapSeq++;
 
         // The tab itself dips, while the whole glass bar takes a slow breath.
         ui.animateTo({ duration: 130, curve: Curve.EaseOut }, () => {
@@ -174,19 +221,33 @@ export struct LiquidTabBar {
         }, () => {
           this.barScale = 1.05;
         });
+        // While the finger stays down the selection lens keeps swelling,
+        // far beyond the bar silhouette.
+        ui.animateTo({
+          duration: 320,
+          curve: curves.springMotion(0.34, 0.7)
+        }, () => {
+          this.bloomX = 1.45;
+          this.bloomY = 1.45;
+          this.glow = 1;
+          this.lensFill = 0.3;
+          this.lensRim = 0.8;
+          });
       } else if (event.type === TouchType.Up) {
         const t = event.changedTouches.length > 0 ? event.changedTouches[0] : event.touches[0];
         const dx: number = t ? t.x - this.downX : 0;
         const dy: number = t ? t.y - this.downY : 0;
         const moved: number = Math.sqrt(dx * dx + dy * dy);
 
-        this.releasePress();
         // Select on release as well, so a long press still commits the tab.
         if (moved < 16) {
+          this.releasePress(false);
           this.selectTab(index);
+        } else {
+          this.releasePress(true);
         }
       } else if (event.type === TouchType.Cancel) {
-        this.releasePress();
+        this.releasePress(true);
       }
     })
     .onClick(() => {
@@ -263,57 +324,69 @@ export struct LiquidTabBar {
       .shadow({ radius: 20, color: '#14000000', offsetX: 0, offsetY: 9 })
 
       // ---------------------------------------------------------------
-      // 4. the selection lens
+      // 4. the selection lens — it intentionally swells beyond the bar
       // ---------------------------------------------------------------
       Stack() {
-        Column()
-          .width('100%')
-          .height('100%')
-          .backgroundEffect({
-            radius: 9,
-            saturation: 1.28,
-            brightness: 1.02
+        Stack() {
+          Column()
+            .width('100%')
+            .height('100%')
+            .backgroundEffect({
+              radius: 9,
+              saturation: 1.28,
+              brightness: 1.02
+            })
+
+          // clear lens body, very slightly smoked
+          Column()
+            .width('100%')
+            .height('100%')
+            .backgroundColor('#10000000')
+
+          Column()
+            .width('100%')
+            .height('100%')
+            .linearGradient({
+              angle: 180,
+              colors: [
+                ['#47FFFFFF', 0],
+                ['#12FFFFFF', 0.22],
+                ['#00FFFFFF', 0.56],
+                ['#12FFFFFF', 0.84],
+                ['#38FFFFFF', 1]
+              ]
+            })
+
+          // inner bottom shade = glass thickness
+          Column()
+            .width('100%')
+            .height('100%')
+            .linearGradient({
+              angle: 0,
+              colors: [
+                ['#1A000000', 0],
+                ['#00000000', 0.32]
+              ]
+            })
+        }
+        .width('100%')
+        .height('100%')
+        .opacity(this.lensFill)
+        .hitTestBehavior(HitTestMode.None)
+
+        Stack() {
+          GlassRim({
+            rimW: this.bubbleW(),
+            rimH: this.bubbleH(),
+            rimR: this.bubbleH() / 2,
+            chromatic: true,
+            sheen: 0.36
           })
-
-        // clear lens body, very slightly smoked
-        Column()
-          .width('100%')
-          .height('100%')
-          .backgroundColor('#10000000')
-
-        Column()
-          .width('100%')
-          .height('100%')
-          .linearGradient({
-            angle: 180,
-            colors: [
-              ['#47FFFFFF', 0],
-              ['#12FFFFFF', 0.22],
-              ['#00FFFFFF', 0.56],
-              ['#12FFFFFF', 0.84],
-              ['#38FFFFFF', 1]
-            ]
-          })
-
-        // inner bottom shade = glass thickness
-        Column()
-          .width('100%')
-          .height('100%')
-          .linearGradient({
-            angle: 0,
-            colors: [
-              ['#1A000000', 0],
-              ['#00000000', 0.32]
-            ]
-          })
-
-        GlassRim({
-          rimW: this.bubbleW(),
-          rimH: this.bubbleH(),
-          rimR: this.bubbleH() / 2,
-          chromatic: true,
-          sheen: 0.36
-        })
+        }
+        .width('100%')
+        .height('100%')
+        .opacity(this.lensRim)
+        .hitTestBehavior(HitTestMode.None)
       }
       .width(this.bubbleW())
       .height(this.bubbleH())
@@ -322,6 +395,7 @@ export struct LiquidTabBar {
       .position({ x: 0, y: (this.barH - this.bubbleH()) / 2 })
       .translate({ x: this.bubbleX })
       .scale({ x: this.bloomX, y: this.bloomY })
+      .hitTestBehavior(HitTestMode.None)
 
       // ---------------------------------------------------------------
       // 5. icons + labels
