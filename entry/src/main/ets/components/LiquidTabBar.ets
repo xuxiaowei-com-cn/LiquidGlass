@@ -1,5 +1,4 @@
-import { curves } from '@kit.ArkUI';
-import { display } from '@kit.ArkUI';
+import { curves, display } from '@kit.ArkUI';
 import { GlassRim } from './GlassRim';
 
 const TAB_COUNT: number = 4;
@@ -22,6 +21,10 @@ const SELECTED_BLUE: string = '#0A84FF';
  *                            chromatic rim; it inflates and springs to the
  *                            tapped item
  *   5. icons + labels      – crisp, always on top of the glass
+ *   6. lens tint           – a tab's glyphs blend toward the selection colour
+ *                            as the travelling lens reaches it, as if the glass
+ *                            itself were tinted; they fade back to ink as the
+ *                            lens moves on.
  */
 @Component
 export struct LiquidTabBar {
@@ -65,6 +68,46 @@ export struct LiquidTabBar {
   }
 
   /**
+   * How strongly the travelling lens colours a tab (0 = ink, 1 = selection
+   * blue). The selected tab is always 1; a neighbour fades in as the lens
+   * gets close and reaches full blue while the glass is over it.
+   */
+  private tintAmount(index: number): number {
+    if (this.selected === index) {
+      return 1;
+    }
+    const lensCenter: number = this.bubbleX + this.bubbleW() / 2;
+    const itemCenter: number = this.tabW() * (index + 0.5);
+    const distance: number = Math.abs(itemCenter - lensCenter);
+    const lensHalf: number = this.bubbleW() * this.bloomX / 2;
+    const reach: number = lensHalf + this.tabW() * 0.18;
+    const fade: number = this.tabW() * 0.12;
+    return Math.max(0, Math.min(1, (reach - distance) / fade));
+  }
+
+  private hex2(value: number): string {
+    const clamped: number = Math.max(0, Math.min(255, Math.round(value)));
+    const digits: string = clamped.toString(16);
+    return digits.length < 2 ? `0${digits}` : digits;
+  }
+
+  private tabColor(index: number, base: string): string {
+    const amount: number = this.tintAmount(index);
+    if (amount <= 0) {
+      return base;
+    }
+    if (amount >= 1) {
+      return SELECTED_BLUE;
+    }
+    const b: number = parseInt(base.substring(1), 16);
+    const t: number = parseInt(SELECTED_BLUE.substring(1), 16);
+    const r: number = ((b >> 16) & 0xFF) + (((t >> 16) & 0xFF) - ((b >> 16) & 0xFF)) * amount;
+    const g: number = ((b >> 8) & 0xFF) + (((t >> 8) & 0xFF) - ((b >> 8) & 0xFF)) * amount;
+    const bl: number = (b & 0xFF) + ((t & 0xFF) - (b & 0xFF)) * amount;
+    return `#${this.hex2(r)}${this.hex2(g)}${this.hex2(bl)}`;
+  }
+
+  /**
    * Magnifies only the bar's own icons/labels around the travelling lens.
    * The page behind the bar is never scaled.
    */
@@ -82,9 +125,8 @@ export struct LiquidTabBar {
     return Math.max(0, Math.min(this.barW - this.bubbleW(), x));
   }
 
-  private nearestTab(): number {
-    const center: number = this.bubbleX + this.bubbleW() / 2;
-    const raw: number = Math.round((center - this.tabW() / 2) / this.tabW());
+  private nearestTabAt(centerX: number): number {
+    const raw: number = Math.round((centerX - this.tabW() / 2) / this.tabW());
     return Math.max(0, Math.min(TAB_COUNT - 1, raw));
   }
 
@@ -124,13 +166,23 @@ export struct LiquidTabBar {
 
   private selectTab(index: number): void {
     if (index === this.selected) {
-      // Tapping the active tab gives the lens a small "breath".
+      // Tapping the active tab gives the lens a small "breath". It also has
+      // to flow home: a drag may have left the lens between two tabs while
+      // the nearest tab is still this one, and it must never rest halfway.
       this.tapSeq++;
       const seq: number = this.tapSeq;
-      this.getUIContext().animateTo({ duration: 170, curve: Curve.EaseOut }, () => {
+      const ui = this.getUIContext();
+      const homeX: number = this.tabW() * index + ITEM_GAP / 2;
+      ui.animateTo({ duration: 170, curve: Curve.EaseOut }, () => {
         this.bloomX = 1.35;
         this.bloomY = 1.35;
         this.glow = 0.95;
+      });
+      ui.animateTo({
+        duration: 420,
+        curve: curves.springMotion(0.46, 0.84)
+      }, () => {
+        this.bubbleX = homeX;
       });
       this.settleBloom(seq);
       return;
@@ -159,27 +211,42 @@ export struct LiquidTabBar {
     this.settleBloom(seq);
   }
 
+  /**
+   * One tab's glyphs. The active tab is selection blue; a neighbour's ink
+   * blends toward the same blue while the travelling lens is over it, so the
+   * covered item reads as if it were seen through tinted glass, then falls
+   * back to ink as the lens leaves.
+   */
   @Builder
-  TabItem(index: number, label: string, icon: Resource) {
+  TabContent(index: number, label: string, icon: Resource) {
     Column({ space: 3 }) {
       Image(icon)
         .width(23)
         .height(23)
-        .fillColor(this.selected === index ? SELECTED_BLUE : UNSELECTED_INK)
+        .fillColor(this.tabColor(index, UNSELECTED_INK))
         .objectFit(ImageFit.Contain)
       Text(label)
         .fontSize(10)
         .fontWeight(this.selected === index ? FontWeight.Medium : FontWeight.Regular)
-        .fontColor(this.selected === index ? SELECTED_BLUE : '#3A3A3E')
+        .fontColor(this.tabColor(index, '#3A3A3E'))
         .maxLines(1)
     }
-    .width('25%')
+    .width('100%')
     .height('100%')
     .justifyContent(FlexAlign.Center)
     .scale({
       x: (this.pressed === index ? 0.95 : 1) * this.itemMagnify(index),
       y: (this.pressed === index ? 0.95 : 1) * this.itemMagnify(index)
     })
+  }
+
+  @Builder
+  TabItem(index: number, label: string, icon: Resource) {
+    Stack() {
+      this.TabContent(index, label, icon)
+    }
+    .width('25%')
+    .height('100%')
     .onTouch((event: TouchEvent) => {
       const ui = this.getUIContext();
       if (event.type === TouchType.Down) {
@@ -231,8 +298,11 @@ export struct LiquidTabBar {
           // Dragged vertically away from the bar: cancel and flow home.
           this.releasePress(true);
         } else {
-          // The lens is already under the finger; settle on the nearest tab.
-          const nearest: number = this.nearestTab();
+          // Snap to the tab nearest the finger, not to a half-finished lens
+          // animation, so a quick release can never leave the bubble between
+          // two items.
+          const centerX: number = t ? this.tabW() * index + t.x : this.bubbleX + this.bubbleW() / 2;
+          const nearest: number = this.nearestTabAt(centerX);
           this.releasePress(false);
           this.selectTab(nearest);
         }
