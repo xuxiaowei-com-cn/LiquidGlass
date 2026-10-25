@@ -5,7 +5,7 @@ const TAB_COUNT: number = 4;
 const BAR_HEIGHT: number = 62;
 const SIDE_MARGIN: number = 22;
 const LENS_HEIGHT: number = 51;
-const LENS_INSET_X: number = 2;
+const LENS_INSET_X: number = 5.5;
 const UNSELECTED_INK: string = '#141418';
 const LABEL_INK: string = '#1D1D1F';
 const SELECTED_BLUE: string = '#0A84FF';
@@ -42,7 +42,7 @@ export struct LiquidTabBar {
   @State private bloomY: number = 1;
   @State private lensActive: number = 0;
   @State private pressed: number = -1;
-  @State private bubbleX: number = 5;
+  @State private bubbleX: number = 5.5;
   private barH: number = BAR_HEIGHT;
   private tapSeq: number = 0;
   private downX: number = 0;
@@ -130,7 +130,12 @@ export struct LiquidTabBar {
   }
 
   private clampBubbleX(x: number): number {
-    return Math.max(0, Math.min(this.barW - this.bubbleW(), x));
+    // Keep the same 5.5 vp margin at both ends as at the top/bottom. At the
+    // leftmost tab the bar's inner-left arc and the lens's outer-left arc
+    // then share a centre, so the gap is uniform around the whole cap.
+    const minX: number = LENS_INSET_X;
+    const maxX: number = this.barW - this.bubbleW() - LENS_INSET_X;
+    return Math.max(minX, Math.min(maxX, x));
   }
 
   private nearestTabAt(centerX: number): number {
