@@ -32,8 +32,12 @@ export struct LiquidTabBar {
   @State private glow: number = 0;
   @State private pressed: number = -1;
   @State private bubbleX: number = 5;
+  @State private barScale: number = 1;
   private barH: number = BAR_HEIGHT;
   private tapSeq: number = 0;
+  private downX: number = 0;
+  private downY: number = 0;
+  private lastSelectAt: number = 0;
 
   aboutToAppear(): void {
     try {
@@ -76,7 +80,26 @@ export struct LiquidTabBar {
     }, 150);
   }
 
+  private releasePress(): void {
+    const ui = this.getUIContext();
+    ui.animateTo({ duration: 200, curve: Curve.EaseOut }, () => {
+      this.pressed = -1;
+    });
+    ui.animateTo({
+      duration: 360,
+      curve: curves.springMotion(0.42, 0.86)
+    }, () => {
+      this.barScale = 1;
+    });
+  }
+
   private selectTab(index: number): void {
+    const now: number = Date.now();
+    if (now - this.lastSelectAt < 320) {
+      return;
+    }
+    this.lastSelectAt = now;
+
     if (index === this.selected) {
       // Tapping the active tab gives the lens a small "breath".
       this.tapSeq++;
@@ -135,14 +158,35 @@ export struct LiquidTabBar {
       y: this.pressed === index ? 0.86 : 1
     })
     .onTouch((event: TouchEvent) => {
+      const ui = this.getUIContext();
       if (event.type === TouchType.Down) {
-        this.getUIContext().animateTo({ duration: 130, curve: Curve.EaseOut }, () => {
+        const p = event.touches[0];
+        this.downX = p ? p.x : 0;
+        this.downY = p ? p.y : 0;
+
+        // The tab itself dips, while the whole glass bar takes a slow breath.
+        ui.animateTo({ duration: 130, curve: Curve.EaseOut }, () => {
           this.pressed = index;
         });
-      } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-        this.getUIContext().animateTo({ duration: 200, curve: Curve.EaseOut }, () => {
-          this.pressed = -1;
+        ui.animateTo({
+          duration: 260,
+          curve: curves.springMotion(0.32, 0.78)
+        }, () => {
+          this.barScale = 1.05;
         });
+      } else if (event.type === TouchType.Up) {
+        const t = event.changedTouches.length > 0 ? event.changedTouches[0] : event.touches[0];
+        const dx: number = t ? t.x - this.downX : 0;
+        const dy: number = t ? t.y - this.downY : 0;
+        const moved: number = Math.sqrt(dx * dx + dy * dy);
+
+        this.releasePress();
+        // Select on release as well, so a long press still commits the tab.
+        if (moved < 16) {
+          this.selectTab(index);
+        }
+      } else if (event.type === TouchType.Cancel) {
+        this.releasePress();
       }
     })
     .onClick(() => {
@@ -293,6 +337,7 @@ export struct LiquidTabBar {
     }
     .width(this.barW)
     .height(this.barH)
+    .scale({ x: this.barScale, y: this.barScale })
     .hitTestBehavior(HitTestMode.Default)
   }
 }
