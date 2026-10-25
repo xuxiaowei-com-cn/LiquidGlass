@@ -6,6 +6,7 @@ const BAR_HEIGHT: number = 62;
 const SIDE_MARGIN: number = 22;
 const LENS_HEIGHT: number = 51;
 const LENS_INSET_X: number = 5.5;
+const TAB_CONTENT_HALF: number = 15;
 const UNSELECTED_INK: string = '#141418';
 const LABEL_INK: string = '#1D1D1F';
 const SELECTED_BLUE: string = '#0A84FF';
@@ -77,20 +78,17 @@ export struct LiquidTabBar {
 
   /**
    * How strongly the travelling lens colours a tab (0 = ink, 1 = selection
-   * blue). The selected tab is always 1; a neighbour fades in as the lens
-   * gets close and reaches full blue while the glass is over it.
+   * blue). The glyph colour follows the glass, not the committed page: only
+   * the tab whose icon/label is actually covered by the lens is blue. As soon
+   * as the lens leaves the glyphs, even the current tab falls back to ink.
    */
   private tintAmount(index: number): number {
-    if (this.selected === index) {
-      return 1;
-    }
     const lensCenter: number = this.bubbleX + this.bubbleW() / 2;
     const itemCenter: number = this.tabW() * (index + 0.5);
     const distance: number = Math.abs(itemCenter - lensCenter);
     const lensHalf: number = this.bubbleW() * this.bloomX / 2;
-    const reach: number = lensHalf + this.tabW() * 0.18;
-    const fade: number = this.tabW() * 0.12;
-    return Math.max(0, Math.min(1, (reach - distance) / fade));
+    const coverage: number = (lensHalf + TAB_CONTENT_HALF - distance) / (TAB_CONTENT_HALF * 2);
+    return Math.max(0, Math.min(1, coverage));
   }
 
   private hex2(value: number): string {
@@ -247,10 +245,9 @@ export struct LiquidTabBar {
   }
 
   /**
-   * One tab's glyphs. The active tab is selection blue; a neighbour's ink
-   * blends toward the same blue while the travelling lens is over it, so the
-   * covered item reads as if it were seen through tinted glass, then falls
-   * back to ink as the lens leaves.
+   * One tab's glyphs. Their colour is driven by the glass: the tab under the
+   * lens is selection blue, and the previous tab drops back to ink as soon as
+   * the lens has moved off its icon/label.
    */
   @Builder
   TabContent(index: number, label: string, icon: Resource) {
