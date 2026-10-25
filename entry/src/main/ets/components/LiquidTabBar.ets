@@ -5,7 +5,7 @@ import { GlassRim } from './GlassRim';
 const TAB_COUNT: number = 4;
 const BAR_HEIGHT: number = 60;
 const SIDE_MARGIN: number = 22;
-const ITEM_GAP: number = 10;
+const ITEM_GAP: number = 8;
 const UNSELECTED_INK: string = '#141418';
 const SELECTED_BLUE: string = '#0A84FF';
 
@@ -61,7 +61,7 @@ export struct LiquidTabBar {
   }
 
   private bubbleH(): number {
-    return this.barH - 10;
+    return this.barH - 9;
   }
 
   /**
@@ -75,7 +75,7 @@ export struct LiquidTabBar {
     const radius: number = this.tabW() * 1.5;
     const influence: number = Math.max(0, 1 - distance / radius);
     const bloom: number = Math.max(0, Math.min(1, (this.bloomX - 1) / 0.45));
-    return 1 + influence * bloom * 0.34;
+    return 1 + influence * bloom * 0.50;
   }
 
   private clampBubbleX(x: number): number {
@@ -128,8 +128,8 @@ export struct LiquidTabBar {
       this.tapSeq++;
       const seq: number = this.tapSeq;
       this.getUIContext().animateTo({ duration: 170, curve: Curve.EaseOut }, () => {
-        this.bloomX = 1.35;
-        this.bloomY = 1.35;
+        this.bloomX = 1.65;
+        this.bloomY = 1.10;
         this.glow = 0.95;
       });
       this.settleBloom(seq);
@@ -146,8 +146,8 @@ export struct LiquidTabBar {
     this.selected = index;
 
     ui.animateTo({ duration: 170, curve: Curve.EaseOut }, () => {
-      this.bloomX = 1.35;
-      this.bloomY = 1.35;
+      this.bloomX = 1.72;
+      this.bloomY = 1.12;
       this.glow = 0.95;
     });
     ui.animateTo({
@@ -204,8 +204,8 @@ export struct LiquidTabBar {
           duration: 320,
           curve: curves.springMotion(0.34, 0.7)
         }, () => {
-          this.bloomX = 1.45;
-          this.bloomY = 1.45;
+          this.bloomX = 1.72;
+          this.bloomY = 1.12;
           this.glow = 1;
         });
       } else if (event.type === TouchType.Move) {
@@ -328,8 +328,8 @@ export struct LiquidTabBar {
             .width('100%')
             .height('100%')
             .backgroundEffect({
-              radius: 9,
-              saturation: 1.28,
+              radius: 6,
+              saturation: 1.25,
               brightness: 1.02
             })
 
@@ -337,7 +337,7 @@ export struct LiquidTabBar {
           Column()
             .width('100%')
             .height('100%')
-            .backgroundColor('#10000000')
+            .backgroundColor('#08000000')
 
           Column()
             .width('100%')
@@ -345,11 +345,11 @@ export struct LiquidTabBar {
             .linearGradient({
               angle: 180,
               colors: [
-                ['#47FFFFFF', 0],
-                ['#12FFFFFF', 0.22],
+                ['#26FFFFFF', 0],
+                ['#08FFFFFF', 0.22],
                 ['#00FFFFFF', 0.56],
-                ['#12FFFFFF', 0.84],
-                ['#38FFFFFF', 1]
+                ['#08FFFFFF', 0.84],
+                ['#1FFFFFFF', 1]
               ]
             })
 
@@ -360,7 +360,7 @@ export struct LiquidTabBar {
             .linearGradient({
               angle: 0,
               colors: [
-                ['#1A000000', 0],
+                ['#10000000', 0],
                 ['#00000000', 0.32]
               ]
             })

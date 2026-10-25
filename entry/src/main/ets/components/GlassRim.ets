@@ -75,12 +75,12 @@ export struct GlassRim {
     // --- chromatic dispersion --------------------------------------------
     if (this.chromatic) {
       const dispersion = ctx.createLinearGradient(0, 0, w, h);
-      dispersion.addColorStop(0, 'rgba(110,235,255,0.48)');
+      dispersion.addColorStop(0, 'rgba(110,235,255,0.68)');
       dispersion.addColorStop(0.28, 'rgba(110,235,255,0.10)');
       dispersion.addColorStop(0.62, 'rgba(255,214,120,0.10)');
-      dispersion.addColorStop(1, 'rgba(255,178,120,0.44)');
+      dispersion.addColorStop(1, 'rgba(255,178,120,0.62)');
       ctx.strokeStyle = dispersion;
-      ctx.lineWidth = 1.35;
+      ctx.lineWidth = 1.5;
       this.roundedPath(1.6, 1.6, w - 3.2, h - 3.2, r - 1.6);
       ctx.stroke();
     }
