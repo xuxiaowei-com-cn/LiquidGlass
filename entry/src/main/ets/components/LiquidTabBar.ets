@@ -7,6 +7,12 @@ const SIDE_MARGIN: number = 22;
 const LENS_HEIGHT: number = 51;
 const LENS_INSET_X: number = 5.5;
 const TAB_CONTENT_HALF: number = 15;
+const ICON_SIZE: number = 22;
+const LABEL_SIZE: number = 12;
+const LABEL_GAP: number = 4;
+/** Reference screen: iPhone 11 (414 pt wide). At 414 vp the bar keeps its 62 vp. */
+const REFERENCE_WIDTH: number = 414;
+const MIN_BAR_SCALE: number = 0.75;
 /** The bar's glass body: 85% light grey, so ~15% of the page shows through. */
 const BAR_GLASS: string = '#D9F0F0F0';
 const UNSELECTED_INK: string = '#141418';
@@ -42,12 +48,12 @@ const SELECTED_BLUE: string = '#0A84FF';
 export struct LiquidTabBar {
   @Link selected: number;
   @State private barW: number = 342;
+  @State private uiScale: number = 1;
   @State private bloomX: number = 1;
   @State private bloomY: number = 1;
   @State private lensActive: number = 0;
   @State private pressed: number = -1;
   @State private bubbleX: number = 5.5;
-  private barH: number = BAR_HEIGHT;
   private tapSeq: number = 0;
   private downX: number = 0;
   private downY: number = 0;
@@ -57,6 +63,11 @@ export struct LiquidTabBar {
   aboutToAppear(): void {
     try {
       const screenWidthVp: number = this.getUIContext().px2vp(display.getDefaultDisplaySync().width);
+      // Keep the iPhone 11 proportions: 414 vp wide -> 62 vp tall. Phones with a
+      // narrower vp canvas (a 360 vp Mate 60 Pro, a 365 vp emulator) draw the
+      // same vp as a visibly chunkier pill, so the whole bar is scaled down by
+      // the width ratio. Wider screens never grow past the reference.
+      this.uiScale = Math.max(MIN_BAR_SCALE, Math.min(1, screenWidthVp / REFERENCE_WIDTH));
       const computed: number = screenWidthVp - SIDE_MARGIN * 2;
       if (computed > 200) {
         this.barW = computed;
@@ -64,7 +75,21 @@ export struct LiquidTabBar {
     } catch (err) {
       this.barW = 342;
     }
-    this.bubbleX = this.tabW() * this.selected + LENS_INSET_X;
+    this.bubbleX = this.tabW() * this.selected + this.lensInset();
+  }
+
+  /**
+   * Height of the bar in vp. Everything vertical — the lens, its insets, the
+   * glyphs — is derived from this scale, so the capsule keeps the same
+   * proportions on every screen instead of getting chunkier on narrow-vp
+   * large phones.
+   */
+  private barH(): number {
+    return BAR_HEIGHT * this.uiScale;
+  }
+
+  private lensInset(): number {
+    return LENS_INSET_X * this.uiScale;
   }
 
   private tabW(): number {
@@ -72,11 +97,11 @@ export struct LiquidTabBar {
   }
 
   private bubbleW(): number {
-    return this.tabW() - LENS_INSET_X * 2;
+    return this.tabW() - this.lensInset() * 2;
   }
 
   private bubbleH(): number {
-    return LENS_HEIGHT;
+    return LENS_HEIGHT * this.uiScale;
   }
 
   /**
@@ -103,7 +128,8 @@ export struct LiquidTabBar {
     const itemCenter: number = this.tabW() * (index + 0.5);
     const distance: number = Math.abs(itemCenter - lensCenter);
     const lensHalf: number = this.bubbleW() * this.bloomX / 2;
-    const coverage: number = (lensHalf + TAB_CONTENT_HALF - distance) / (TAB_CONTENT_HALF * 2);
+    const half: number = TAB_CONTENT_HALF * this.uiScale;
+    const coverage: number = (lensHalf + half - distance) / (half * 2);
     return Math.max(0, Math.min(1, coverage));
   }
 
@@ -147,8 +173,9 @@ export struct LiquidTabBar {
     // Keep the same 5.5 vp margin at both ends as at the top/bottom. At the
     // leftmost tab the bar's inner-left arc and the lens's outer-left arc
     // then share a centre, so the gap is uniform around the whole cap.
-    const minX: number = LENS_INSET_X;
-    const maxX: number = this.barW - this.bubbleW() - LENS_INSET_X;
+    const inset: number = this.lensInset();
+    const minX: number = inset;
+    const maxX: number = this.barW - this.bubbleW() - inset;
     return Math.max(minX, Math.min(maxX, x));
   }
 
@@ -207,7 +234,7 @@ export struct LiquidTabBar {
       }, () => {
         this.bloomX = 1;
         this.bloomY = 1;
-        this.bubbleX = this.tabW() * this.selected + LENS_INSET_X;
+        this.bubbleX = this.tabW() * this.selected + this.lensInset();
       });
       this.fadeLens(seq, 300);
     }
@@ -221,7 +248,7 @@ export struct LiquidTabBar {
       this.tapSeq++;
       const seq: number = this.tapSeq;
       const ui = this.getUIContext();
-      const homeX: number = this.tabW() * index + LENS_INSET_X;
+      const homeX: number = this.tabW() * index + this.lensInset();
       this.wakeLens();
       ui.animateTo({ duration: 170, curve: Curve.EaseOut }, () => {
         this.bloomX = 1.34;
@@ -240,7 +267,7 @@ export struct LiquidTabBar {
     this.tapSeq++;
     const seq: number = this.tapSeq;
     const ui = this.getUIContext();
-    const targetX: number = this.tabW() * index + LENS_INSET_X;
+    const targetX: number = this.tabW() * index + this.lensInset();
 
     // Update the active page immediately (a hard cut avoids muddy in-between
     // colours while the gradient changes), then let the lens travel.
@@ -267,14 +294,14 @@ export struct LiquidTabBar {
    */
   @Builder
   TabContent(index: number, label: string, icon: Resource) {
-    Column({ space: 4 }) {
+    Column({ space: LABEL_GAP * this.uiScale }) {
       Image(icon)
-        .width(22)
-        .height(22)
+        .width(ICON_SIZE * this.uiScale)
+        .height(ICON_SIZE * this.uiScale)
         .fillColor(this.tabColor(index, UNSELECTED_INK))
         .objectFit(ImageFit.Contain)
       Text(label)
-        .fontSize(12)
+        .fontSize(LABEL_SIZE * this.uiScale)
         .fontWeight(this.selected === index ? FontWeight.Medium : FontWeight.Regular)
         .fontColor(this.tabColor(index, LABEL_INK))
         .maxLines(1)
@@ -412,8 +439,8 @@ export struct LiquidTabBar {
 
         GlassRim({
           rimW: this.barW,
-          rimH: this.barH,
-          rimR: this.barH / 2,
+          rimH: this.barH(),
+          rimR: this.barH() / 2,
           strength: 0.45,
           darkEdge: 0.02,
           chromatic: false,
@@ -423,7 +450,7 @@ export struct LiquidTabBar {
       }
       .width('100%')
       .height('100%')
-      .borderRadius(this.barH / 2)
+      .borderRadius(this.barH() / 2)
       .clip(true)
       .shadow({ radius: 12, color: '#0A000000', offsetX: 0, offsetY: 6 })
 
@@ -437,7 +464,7 @@ export struct LiquidTabBar {
         .borderRadius(this.bubbleH() / 2)
         .backgroundColor('#01000000')
         .shadow({ radius: 7, color: '#15000000', offsetX: 0, offsetY: 4 })
-        .position({ x: 0, y: (this.barH - this.bubbleH()) / 2 })
+        .position({ x: 0, y: (this.barH() - this.bubbleH()) / 2 })
         .translate({ x: this.bubbleX })
         .scale({ x: this.bloomX, y: this.lensScaleY() })
         .hitTestBehavior(HitTestMode.None)
@@ -449,7 +476,7 @@ export struct LiquidTabBar {
         .borderRadius(this.bubbleH() / 2)
         .backgroundColor('#01000000')
         .shadow({ radius: 15, color: '#28000000', offsetX: 0, offsetY: 7 })
-        .position({ x: 0, y: (this.barH - this.bubbleH()) / 2 })
+        .position({ x: 0, y: (this.barH() - this.bubbleH()) / 2 })
         .translate({ x: this.bubbleX })
         .scale({ x: this.bloomX, y: this.lensScaleY() })
         .opacity(this.lensActive)
@@ -553,7 +580,7 @@ export struct LiquidTabBar {
       .width(this.bubbleW())
       .height(this.bubbleH())
       .borderRadius(this.bubbleH() / 2)
-      .position({ x: 0, y: (this.barH - this.bubbleH()) / 2 })
+      .position({ x: 0, y: (this.barH() - this.bubbleH()) / 2 })
       .translate({ x: this.bubbleX })
       .scale({ x: this.bloomX, y: this.lensScaleY() })
       .hitTestBehavior(HitTestMode.None)
@@ -571,7 +598,7 @@ export struct LiquidTabBar {
       .height('100%')
     }
     .width(this.barW)
-    .height(this.barH)
+    .height(this.barH())
     .hitTestBehavior(HitTestMode.Default)
   }
 }

@@ -11,7 +11,7 @@
 
 ## 录屏演示
 
-最新版在 Android 14 模拟器上录制：`adb shell screenrecord` 抓取点击与按住拖动，再转成 GIF；同一份 ArkUI 代码也在 HarmonyOS API 20 与 iOS 26.3 模拟器上验证。导航栏几何按 App Store 参考统一为 **62 vp 高、距屏幕底部 17 vp**。
+最新版在 Android 14 模拟器上录制：`adb shell screenrecord` 抓取点击与按住拖动，再转成 GIF；同一份 ArkUI 代码也在 HarmonyOS API 20 与 iOS 26.3 模拟器上验证。导航栏几何按 App Store 参考统一为 **62 vp 高、距屏幕底部 17 vp**；屏幕 vp 宽度不足 414 vp 的机型（Mate 60 Pro 约 360 vp、这台模拟器 365 vp）会按屏宽等比缩小，见下表「屏幕适配」行。
 
 ![点击与拖动演示](docs/demo.gif)
 
@@ -29,6 +29,7 @@
 | 膨胀 / 弹射 | `animateTo` + `curves.springMotion`（点击 1.34×，按住 1.38×），活跃态高度再 +2 vp |
 | 彩色背景 | 预渲染 PNG 光斑，缓慢漂移 |
 | 沉浸式 | 全屏 + `getWindowAvoidArea` 安全区；Android 端用 `AppTheme` 把状态栏图标切成深色 |
+| 屏幕适配 | 以 iPhone 11（414 vp 宽）为基准：`scale = clamp(屏宽vp / 414, 0.75, 1)`，栏高 = 62 × scale，透镜、内缩、图标、文字一起等比缩放。iPhone 11 仍是 62 vp；Mate 60 Pro（360 vp）约 54 vp，胶囊比例与 iPhone 11 一致 |
 
 ### 透明与“白霜”的平衡
 
