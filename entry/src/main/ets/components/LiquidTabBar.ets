@@ -33,8 +33,6 @@ export struct LiquidTabBar {
   @State private pressed: number = -1;
   @State private bubbleX: number = 5;
   @State private barScale: number = 1;
-  @State private lensFill: number = 1;
-  @State private lensRim: number = 1;
   private barH: number = BAR_HEIGHT;
   private tapSeq: number = 0;
   private downX: number = 0;
@@ -103,8 +101,6 @@ export struct LiquidTabBar {
         this.bloomX = 1;
         this.bloomY = 1;
         this.glow = 0;
-        this.lensFill = 1;
-        this.lensRim = 1;
       });
     }, 150);
   }
@@ -128,8 +124,6 @@ export struct LiquidTabBar {
         this.bloomX = 1;
         this.bloomY = 1;
         this.glow = 0;
-        this.lensFill = 1;
-        this.lensRim = 1;
         this.bubbleX = this.tabW() * this.selected + ITEM_GAP / 2;
       });
     }
@@ -144,8 +138,6 @@ export struct LiquidTabBar {
         this.bloomX = 1.35;
         this.bloomY = 1.35;
         this.glow = 0.95;
-        this.lensFill = 0.3;
-        this.lensRim = 0.8;
       });
       this.settleBloom(seq);
       return;
@@ -164,8 +156,6 @@ export struct LiquidTabBar {
       this.bloomX = 1.35;
       this.bloomY = 1.35;
       this.glow = 0.95;
-      this.lensFill = 0.3;
-      this.lensRim = 0.8;
     });
     ui.animateTo({
       duration: 640,
@@ -230,8 +220,6 @@ export struct LiquidTabBar {
           this.bloomX = 1.45;
           this.bloomY = 1.45;
           this.glow = 1;
-          this.lensFill = 0.3;
-          this.lensRim = 0.8;
         });
       } else if (event.type === TouchType.Move) {
         const t = event.touches[0];
@@ -392,7 +380,6 @@ export struct LiquidTabBar {
         }
         .width('100%')
         .height('100%')
-        .opacity(this.lensFill)
         .hitTestBehavior(HitTestMode.None)
 
         Stack() {
@@ -406,7 +393,6 @@ export struct LiquidTabBar {
         }
         .width('100%')
         .height('100%')
-        .opacity(this.lensRim)
         .hitTestBehavior(HitTestMode.None)
       }
       .width(this.bubbleW())
