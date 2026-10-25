@@ -8,6 +8,14 @@
 
 ![效果](docs/screenshots/bar-over-color.jpg)
 
+## 录屏演示
+
+在鸿蒙模拟器上录制：macOS AVFoundation 抓取模拟器所在显示器，裁到设备画面，再用 `hdc` 注入按住拖动与点击。
+
+![拖动与切页演示](docs/demo.gif)
+
+[MP4 版本](docs/demo.mp4)
+
 ## 效果拆解
 
 | 层 | 做法 |
