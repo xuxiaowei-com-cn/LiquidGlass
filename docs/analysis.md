@@ -40,12 +40,12 @@
 | 图标 | ≈ 40 px | ≈ 20 pt | 22 vp × 屏幕比例 |
 | 文字 | ≈ 20 px | ≈ 10 pt | 12 fp × 屏幕比例 |
 | 选中透镜 | ≈ 178 × 102 px | ≈ 89 × 51 pt | (栏宽 / 4 − 11) × 51 vp × 屏幕比例 |
-| 透镜内缩 | 4 px / 11.5 px | 2 pt / 5.75 pt | x 5.5 vp，y 5.5 vp（同心） |
+| 透镜内缩 | 4 px / 11.5 px | 2 pt / 5.75 pt | x 5.5 vp × 屏幕比例，y 相同（同心） |
 | 活跃态膨胀 | 约 1.35× | — | 点击 1.34×，按住 1.38×，活跃态高度再 +2 vp |
 
 ### 2.1 屏幕适配（以 iPhone 11 为基准）
 
-`62 vp` 只对 iPhone 11 这类 414 vp 宽的画布成立。同样 62 vp，在 360 vp 的 Mate 60 Pro 上会占到屏宽的 17%（iPhone 11 是 15%），看起来更粗；而这台 HarmonyOS 模拟器报的是 365.7 vp 宽（densityPixels 3.5），胶囊同样是偏胖的。所以整条栏按屏宽等比缩放：
+`62 vp` 只对 iPhone 11 这类 414 vp 宽的画布成立。同样 62 vp，在 360 vp 的 Mate 60 Pro 上会占到屏宽的 17%（iPhone 11 是 15%），看起来更粗；而这台 HarmonyOS 模拟器报的是 365.7 vp 宽（`densityPixels = 3.5`），胶囊同样是偏胖的。所以整条栏按屏宽等比缩放：
 
 ```ts
 const REFERENCE_WIDTH = 414;   // iPhone 11：62 vp 不变
@@ -60,11 +60,12 @@ labelGap  = 4 * scale;
 ```
 
 - ≤ 414 vp 的机型按比例收窄，`414 vp` 及以上（平板、折叠展开）保持 62 vp，不再变高。
-- 分档结果：iPhone 11 → 62 vp；Mate 60 Pro（360 vp）→ 54.3 vp；本机模拟器（365.7 vp）→ 54.8 vp。
+- 分档结果：iPhone 11 → 62 vp；Mate 60 Pro（360 vp）→ 54.3 vp；本机模拟器（365.7 vp）→ 54.8 vp；iPhone 17 Pro（402 pt）→ 60.2 pt；Android 模拟器（1080 / 2.625 = 411.4 vp）→ 61.6 vp。
 - 图标 / 文字跟着缩，是为了让 45 vp 的透镜里仍然留出和 iPhone 11 一样的上下内边距（51 : 62 的比例保持不变）；只缩栏体不缩内容会把内容顶到胶囊边缘。
 - 触摸、吸附、放大等逻辑都走 `tabW()` / `lensInset()` 这些派生值，所以缩放后跟手和落点吸附不需要额外处理。
+- `uiScale` 只在 `aboutToAppear` 里算一次；横竖屏旋转、折叠展开这类运行时尺寸变化需要额外在页面 `onAreaChange` 里重算。
 
-也就是：**栏高 62 vp、胶囊半径 31 vp、四个等宽标签、选中态是一颗又宽又扁的胶囊**。透镜不是一个小圆钮——它的高度约为栏高的 4/5，上下左右都留 5.5 vp。左右采用与上下相同的 5.5 vp 内缩不是随意取值：栏体端部半径 31、透镜端部半径 25.5，内缩 5.5 后两个圆心重合，透镜在最左 / 最右标签时与栏体端部形成同心圆弧，间距处处相等。代价是透镜比参考测得的 89 pt 略窄（约 81 vp），但参考的 2 pt 侧边距本身会让两段圆弧不同心。
+也就是（按 iPhone 11 的 414 vp 基准）：**栏高 62 vp、胶囊半径 31 vp、四个等宽标签、选中态是一颗又宽又扁的胶囊**。透镜不是一个小圆钮——它的高度约为栏高的 4/5，上下左右都留 5.5 vp。左右采用与上下相同的 5.5 vp 内缩不是随意取值：栏体端部半径 31、透镜端部半径 25.5，内缩 5.5 后两个圆心重合，透镜在最左 / 最右标签时与栏体端部形成同心圆弧，间距处处相等。代价是透镜比参考测得的 89 pt 略窄（约 81 vp），但参考的 2 pt 侧边距本身会让两段圆弧不同心。
 
 ---
 
@@ -128,18 +129,18 @@ y=259  ( 99, 200, 232)   ← 回到背景
 
 因此 `GlassRim` 用 Canvas 画了三层：
 
-- **暗色接触线**：0.5 vp，`rgba(12,14,18,0.13)`，让玻璃在白底上仍有边界。
+- **暗色接触线**：0.5 vp，栏体很淡（0.02），透镜静止态最重（0.13），让玻璃在白底上仍有边界。
 - **白色镜面高光**：0.5 vp，纵向渐变，顶部 96%、底部 92%，中间两侧只有 8%–10%。这是最关键的一条——高光只应该出现在上下唇。
 - **底部反光线**：0.9 vp，向内缩 2 vp，透明度 26%，模拟玻璃厚度。
 - 可选的**色散**：透镜活跃时叠一条 1.05 vp 的青 → 琥珀描边，再加一条更宽、更淡的二次色散。
 
 ### 3.4 极轻的冷色调
 
-`#068FA8C8` 的一层薄冷色，避免白色材质在暖色背景上发黄。肉眼几乎不可见，但能让玻璃更“干净”。
+`#018FA8C8` 的一层薄冷色，避免白色材质在暖色背景上发黄。肉眼几乎不可见，但能让玻璃更“干净”。
 
 ### 3.5 投影
 
-- 栏体：`radius: 14, color: '#0E000000', offsetY: 6`，只留一条很浅的暗带。
+- 栏体：`radius: 12, color: '#0A000000', offsetY: 6`，只留一条很浅的暗带。
 - 静止透镜：`radius: 7, color: '#15000000', offsetY: 4`。
 - 活跃透镜：额外叠一层 `radius: 15, color: '#28000000', offsetY: 7`，透明度跟随 `lensActive`，让透镜在按下时“抬起来”。
 
@@ -155,8 +156,8 @@ private tintAmount(index: number): number {
   const itemCenter = this.tabW() * (index + 0.5);
   const distance = Math.abs(itemCenter - lensCenter);
   const lensHalf = this.bubbleW() * this.bloomX / 2;
-  const coverage = (lensHalf + TAB_CONTENT_HALF - distance)
-                 / (TAB_CONTENT_HALF * 2);
+  const half = TAB_CONTENT_HALF * this.uiScale;   // 跟随屏幕比例
+  const coverage = (lensHalf + half - distance) / (half * 2);
   return Math.max(0, Math.min(1, coverage));
 }
 ```
@@ -251,7 +252,7 @@ private lensScaleY(): number {
 
 ![iOS 27 选中透镜瞬间](reference/ios-bar-lens.jpg)
 
-最左 / 最右标签处，透镜端部与栏体端部同心：栏体端部半径 31 vp、透镜端部半径 25.5 vp，左右内缩取得与上下相同的 5.5 vp，两个圆心重合，间隙沿整段圆弧保持 5.5 vp。
+最左 / 最右标签处，透镜端部与栏体端部同心：栏体端部半径 31 vp、透镜端部半径 25.5 vp（都随 `uiScale` 缩放），左右内缩取得与上下相同的 5.5 vp，两个圆心重合，间隙沿整段圆弧保持 5.5 vp。
 
 ![最左侧透镜与栏体端部同心](screenshots/bar-left-cap.png)
 
@@ -323,9 +324,9 @@ Stack
 
 细节：
 
-- 栏体 `62 vp` 高，宽 = 屏宽 − 44 vp，两端半径 31。
-- 选中透镜 `(栏宽 / 4 − 11) × 51 vp`，横向与纵向都内缩 5.5 vp。端部圆弧与栏体端部同心，最左 / 最右标签处的上、下、侧边距一致。
-- 图标 22 vp，文字 12 fp，选中色 `#0A84FF`。
+- 栏体 `62 vp × uiScale` 高（414 vp 屏宽时就是 62），宽 = 屏宽 − 44 vp，两端半径 = 高度的一半。
+- 选中透镜 `(栏宽 / 4 − 11 × uiScale) × 51 vp × uiScale`，横向与纵向都内缩 `5.5 vp × uiScale`。端部圆弧与栏体端部同心，最左 / 最右标签处的上、下、侧边距一致。
+- 图标 `22 vp × uiScale`，文字 `12 fp × uiScale`，选中色 `#0A84FF`。
 - 透镜与栏体都开启 `hitTestBehavior(HitTestMode.None)`，触摸只由最上层的 TabItem 接管。
 - `GlassRim` 的 Canvas 只在 `onReady` 时绘制一次；尺寸在首帧前已确定，动画只改变 translate / scale / opacity，不触发重绘。
 
@@ -352,11 +353,15 @@ ui.animateTo({ duration: 320, curve: curves.springMotion(0.34, 0.7) }, () => {
 ```ts
 // 手指在导航栏内的横坐标（触摸点在 TabItem 内的 x + 该 Tab 的偏移）
 const barX = this.tabW() * index + touch.x;
-// 气泡中心对准手指，并限制在栏内
-this.bubbleX = Math.max(0, Math.min(
-  this.barW - this.bubbleW(),
-  barX - this.bubbleW() / 2
-));
+// 气泡中心对准手指，并保留和上下一致的内缩
+this.bubbleX = this.clampBubbleX(barX - this.bubbleW() / 2);
+
+private clampBubbleX(x: number): number {
+  const inset = this.lensInset();               // 5.5 vp × uiScale
+  const minX = inset;
+  const maxX = this.barW - this.bubbleW() - inset;
+  return Math.max(minX, Math.min(maxX, x));
+}
 ```
 
 - 四个 `TabItem` 按到气泡中心的距离放大（`itemMagnify`，最大 1.22×），所以气泡滑过时导航栏图标/文字会连续鼓起；
@@ -390,7 +395,7 @@ this.bubbleX = Math.max(0, Math.min(
 - `hvigorw assembleApp` 负责 ArkTS 编译、HAP 打包、跨平台资源拷贝、Android Gradle 打包和 iOS 工程构建。
 - Android 模拟器上使用 `adb shell screenrecord` + `adb shell input tap/swipe` 做点击、按住、拖动验证；`input` 注入需要模拟器（或已开启“USB 调试（安全设置）”的设备）。
 - ArkTS 的 `setWindowSystemBarProperties` 在 ArkUI-X 上不会作用到 Android 系统栏。Android 端在 `.arkui-x/android/app/src/main/res/values/styles.xml` 中用 `windowLightStatusBar` / `windowLightNavigationBar` 把系统图标切成深色，并保持系统栏透明。
-- iOS 端同样使用这份 ArkTS 代码；iOS 模拟器构建走 `xcodebuild -sdk iphonesimulator`，安全区为 34 pt，`max(17, safeBottom − 17)` 得到 17 pt，栏高 62 vp≈62 pt，与 App Store 参考的 62.5 pt / 17 pt 对齐。
+- iOS 端同样使用这份 ArkTS 代码；iOS 模拟器构建走 `xcodebuild -sdk iphonesimulator`，安全区为 34 pt，`max(17, safeBottom − 17)` 得到 17 pt；iPhone 17 Pro 宽 402 pt，栏高 = 62 × 402 / 414 ≈ 60 pt（iPhone 11 的 414 pt 宽才是 62 pt）。
 - 三端使用同一份材质代码；差异主要来自 Canvas 描边绘制、系统字体和状态栏 / 手势条样式。
 
 ---
@@ -399,19 +404,20 @@ this.bubbleX = Math.max(0, Math.min(
 
 | 特征 | iOS 27 参考 | 当前实现 | 说明 |
 | --- | --- | --- | --- |
-| 悬浮胶囊 | ✅ | ✅ | 62 vp 高，左右 22 vp 留边 |
+| 悬浮胶囊 | ✅ | ✅ | 62 vp 高（414 vp 屏宽基准），左右 22 vp 留边 |
 | 背景透明（无模糊） | ✅ | ✅ | 不使用 `backgroundEffect`；85% 浅灰底 + 白色/冷色透明层 + 镜面边 |
 | 顶部白霜 / 中部清澈 / 底部反光 | ✅ | ✅ | 4% → 0.4–1% → 2% 纵向渐变 |
 | 暗色接触线 + 镜面高光 | ✅ | ✅ | 0.5 vp 暗线 + 0.5 vp 纵向高光 |
 | 静止态烟灰透镜 | ✅ | ✅ | 4% 烟灰 + 灰边 + 软投影 |
 | 活跃态清透透镜 | ✅ | ✅ | 白色顶部高光 + 色散 + 抬升投影 |
-| 透镜膨胀 + 弹簧位移 | ✅ | ✅ | 1.34–1.38× + 640 ms spring |
+| 透镜膨胀 + 弹簧位移 | ✅ | ✅ | 1.34–1.38×（活跃态再 +2 vp）+ 640 ms spring |
 | 青 / 琥珀色散 | ✅ | ✅（近似） | Canvas 双色描边 |
 | 覆盖文字/图标取色 | ✅ | ✅（按标签渐变） | 只有被透镜盖住的图标/文字变选中蓝，气泡离开即恢复墨色 |
+| 屏幕适配 | ✅ | ✅ | 按屏宽等比缩放，保持 iPhone 11 的胶囊比例 |
 | 字体 | SF Pro | HarmonyOS Sans | 系统字体差异 |
 | Home Indicator | 系统 | 系统 | 模拟器 / 设备样式不同 |
 
-最大的差异是**实时折射**：iOS 的实时玻璃会持续把边缘内容弯折；当前实时背景保持透明、不做模糊或位移，也没有快照带补偿，因此边缘只有描边、白霜与反光带来的厚度暗示，没有真正的几何折射。
+最大的差异是**实时折射**：iOS 的实时玻璃会持续把边缘内容弯折；当前实时背景保持透明、不做模糊或位移，也不做几何折射补偿，因此边缘只有描边、白霜与反光带来的厚度暗示。
 
 ---
 
@@ -454,6 +460,9 @@ adb -s emulator-5556 shell am start -n \
 ### iOS（模拟器）
 
 ```bash
+# 先生成 iOS 的 ArkTS 资源
+/Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw --no-daemon assembleApp
+
 cd .arkui-x/ios
 xcodebuild -project app.xcodeproj -scheme app -configuration Debug \
   -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \

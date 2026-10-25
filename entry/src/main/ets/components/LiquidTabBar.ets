@@ -2,11 +2,17 @@ import { curves, display } from '@kit.ArkUI';
 import { GlassRim } from './GlassRim';
 
 const TAB_COUNT: number = 4;
+/** Bar height at the 414 vp reference width; multiplied by `uiScale`. */
 const BAR_HEIGHT: number = 62;
+/** Horizontal margin to the screen edges; the bar width is screen − 2 × this. */
 const SIDE_MARGIN: number = 22;
+/** Lens height at the reference width; the bar keeps 5.5 vp above and below it. */
 const LENS_HEIGHT: number = 51;
+/** Gap between the lens and the bar, identical on all four sides (concentric caps). */
 const LENS_INSET_X: number = 5.5;
+/** Half of the box the glyphs occupy; drives the lens' tint coverage. */
 const TAB_CONTENT_HALF: number = 15;
+/** Glyph sizes at the reference width; they scale with the bar. */
 const ICON_SIZE: number = 22;
 const LABEL_SIZE: number = 12;
 const LABEL_GAP: number = 4;
@@ -43,6 +49,10 @@ const SELECTED_BLUE: string = '#0A84FF';
  *                            as the travelling lens reaches it, as if the glass
  *                            itself were tinted; they fade back to ink as the
  *                            lens moves on.
+ *
+ * All geometry is authored at a 414 vp wide canvas (iPhone 11) and multiplied
+ * by `uiScale` at runtime: a narrower vp canvas — which is what a physically
+ * large phone reports — would otherwise draw a chunkier capsule than intended.
  */
 @Component
 export struct LiquidTabBar {
@@ -63,10 +73,10 @@ export struct LiquidTabBar {
   aboutToAppear(): void {
     try {
       const screenWidthVp: number = this.getUIContext().px2vp(display.getDefaultDisplaySync().width);
-      // Keep the iPhone 11 proportions: 414 vp wide -> 62 vp tall. Phones with a
-      // narrower vp canvas (a 360 vp Mate 60 Pro, a 365 vp emulator) draw the
-      // same vp as a visibly chunkier pill, so the whole bar is scaled down by
-      // the width ratio. Wider screens never grow past the reference.
+      // Keep the iPhone 11 proportions: 414 vp wide -> 62 vp tall. A narrower
+      // vp canvas — e.g. a 360 vp Mate 60 Pro — makes the same 62 vp read as a
+      // chunkier pill, so the whole bar is scaled down by the width ratio.
+      // Wider screens never grow past the reference.
       this.uiScale = Math.max(MIN_BAR_SCALE, Math.min(1, screenWidthVp / REFERENCE_WIDTH));
       const computed: number = screenWidthVp - SIDE_MARGIN * 2;
       if (computed > 200) {
@@ -111,7 +121,7 @@ export struct LiquidTabBar {
    * another 2 vp taller on top of that bloom. The extra 2 vp is expressed as
    * a scale (2 / LENS_HEIGHT) rather than as an animated layout height so the
    * Canvas rim can stay exactly as crisp as it is at rest: GlassRim paints
-   * once for a 51 vp capsule and afterwards is only transformed.
+   * once for the capsule and afterwards is only transformed.
    */
   private lensScaleY(): number {
     return this.bloomY + this.lensActive * (2 / LENS_HEIGHT);
@@ -170,9 +180,9 @@ export struct LiquidTabBar {
   }
 
   private clampBubbleX(x: number): number {
-    // Keep the same 5.5 vp margin at both ends as at the top/bottom. At the
-    // leftmost tab the bar's inner-left arc and the lens's outer-left arc
-    // then share a centre, so the gap is uniform around the whole cap.
+    // Keep the same inset at both ends as at the top/bottom. At the leftmost
+    // tab the bar's inner-left arc and the lens's outer-left arc then share a
+    // centre, so the gap is uniform around the whole cap.
     const inset: number = this.lensInset();
     const minX: number = inset;
     const maxX: number = this.barW - this.bubbleW() - inset;
@@ -315,6 +325,12 @@ export struct LiquidTabBar {
     })
   }
 
+  /**
+   * One touch target: the whole quarter of the bar. Down wakes the lens and
+   * lets it glide under the finger, Move drags it, Up snaps to the nearest tab
+   * (or flows home when the finger left the bar vertically). The trailing
+   * `onClick` is ignored so a touch never commits an index twice.
+   */
   @Builder
   TabItem(index: number, label: string, icon: Resource) {
     Stack() {

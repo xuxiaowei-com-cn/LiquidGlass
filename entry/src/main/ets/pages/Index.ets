@@ -2,6 +2,15 @@ import { window } from '@kit.ArkUI';
 import { AuroraBackground } from '../components/AuroraBackground';
 import { LiquidTabBar } from '../components/LiquidTabBar';
 
+/**
+ * The demo page behind the liquid-glass bar.
+ *
+ * It exists to give the glass something worth showing through: a drifting
+ * aurora wallpaper, a scrolling column of saturated cards, a warm scrim under
+ * the status bar and the floating tab bar. The page reads the system insets
+ * once and uses them for that scrim, for the content's bottom padding and for
+ * the bar's distance from the home indicator.
+ */
 @Entry
 @Component
 struct Index {
@@ -10,6 +19,8 @@ struct Index {
   @State safeBottom: number = 10;
   private scroller: Scroller = new Scroller();
 
+  // Per-tab copy: the page is the same everywhere, only these strings and the
+  // hero gradient change, which makes the tab switch easy to read.
   private tabTitles: string[] = ['Today', '游戏', 'App', '搜索'];
   private kickers: string[] = ['LIQUID GLASS', 'PLAY', 'DISCOVER', 'FIND'];
   private heroTitles: string[] = [
@@ -31,6 +42,7 @@ struct Index {
     ['#F7B733', '#FC4A1A', '#FF7EB6']
   ];
 
+  /** Reads the status bar / home indicator insets so the page can stay clear. */
   aboutToAppear(): void {
     const host = this.getUIContext().getHostContext();
     if (!host) {
@@ -57,6 +69,7 @@ struct Index {
     });
   }
 
+  /** Date, the current tab's title and the avatar badge. */
   @Builder
   Header() {
     Row() {
@@ -112,6 +125,10 @@ struct Index {
     .margin({ top: 8, bottom: 18 })
   }
 
+  /**
+   * The hero artwork: a per-tab gradient, a few glass bubbles and a miniature
+   * echo of the real bar. Repeated once at the very bottom of the page.
+   */
   @Builder
   HeroCard() {
     Stack({ alignContent: Alignment.BottomStart }) {
@@ -195,6 +212,7 @@ struct Index {
     })
   }
 
+  /** Section heading with a small English caption on the right. */
   @Builder
   SectionTitle(title: string, caption: string) {
     Row() {
@@ -212,6 +230,7 @@ struct Index {
     .margin({ top: 26, bottom: 11 })
   }
 
+  /** One of the three material stats under 材质拆解. */
   @Builder
   StatCard(value: string, label: string, tint: string) {
     Column() {
@@ -235,6 +254,7 @@ struct Index {
     .shadow({ radius: 12, color: '#14000000', offsetY: 5 })
   }
 
+  /** A swatch in the horizontal 取色样本 strip. */
   @Builder
   ColorCard(title: string, from: string, to: string) {
     Stack({ alignContent: Alignment.BottomStart }) {
@@ -267,6 +287,7 @@ struct Index {
     .shadow({ radius: 16, color: '#26000000', offsetY: 8 })
   }
 
+  /** A row in 观察要点: round glyph, title and one line of explanation. */
   @Builder
   InsightRow(glyph: string, title: string, desc: string, tint: string) {
     Row({ space: 13 }) {
@@ -304,6 +325,10 @@ struct Index {
     .margin({ bottom: 10 })
   }
 
+  /**
+   * The closing card. Its large `LIQUID GLASS` watermark is the easiest thing
+   * to park under the bar to judge the glass' transparency.
+   */
   @Builder
   ClosingCard() {
     Stack({ alignContent: Alignment.TopStart }) {
@@ -364,6 +389,7 @@ struct Index {
     .shadow({ radius: 20, color: '#33351E75', offsetY: 10 })
   }
 
+  /** The scrollable column behind the bar. */
   @Builder
   Content() {
     Column() {
@@ -429,7 +455,8 @@ struct Index {
       .width('100%')
       .height('100%')
 
-      // keep the status bar readable while content slides underneath
+      // A warm scrim that keeps the status bar readable while content slides
+      // underneath it (the page itself is full-screen / edge-to-edge).
       Column()
         .width('100%')
         .height(this.safeTop + 40)
@@ -444,6 +471,8 @@ struct Index {
         .position({ x: 0, y: 0 })
         .hitTestBehavior(HitTestMode.None)
 
+      // 17 vp above the home indicator on gesture-nav devices; three-button
+      // navigation lifts the bar above the safe area instead.
       LiquidTabBar({ selected: $selected })
         .margin({ bottom: Math.max(17, this.safeBottom - 17) })
     }

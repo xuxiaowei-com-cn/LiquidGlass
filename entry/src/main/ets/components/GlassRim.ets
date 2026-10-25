@@ -15,6 +15,11 @@
  * a low strength while it is at rest and a full-strength, chromatic rim while
  * it is moving, which is exactly what the reference recording shows.
  *
+ * The rim is painted once in `onReady`. Callers only ever transform the
+ * component (translate / scale / opacity), never re-size it mid-animation, so
+ * the 0.5 vp lines stay crisp instead of being re-rasterised every frame while
+ * the lens travels or blooms.
+ *
  * The component is purely decorative, it never takes touches.
  */
 @Component
