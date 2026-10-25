@@ -45,12 +45,13 @@ export struct LiquidTabBar {
   @Link @Watch('onEdgeChanged') pageSnap: image.PixelMap | undefined;
   @Link @Watch('onEdgeChanged') showEdgeLens: boolean;
   @Prop bottomMargin: number = 17;
-  @State private barW: number = 342;
-  @State private bloomX: number = 1;
-  @State private bloomY: number = 1;
-  @State private lensActive: number = 0;
+  @State @Watch('drawGlass') private barW: number = 342;
+  @State @Watch('drawGlass') private bloomX: number = 1;
+  @State @Watch('drawGlass') private bloomY: number = 1;
+  @State @Watch('drawGlass') private lensActive: number = 0;
   @State private pressed: number = -1;
-  @State private bubbleX: number = 5.5;
+  @State @Watch('drawGlass') private bubbleX: number = 5.5;
+  @State @Watch('drawGlass') private barGrow: number = 0;
   private barH: number = BAR_HEIGHT;
   private tapSeq: number = 0;
   private downX: number = 0;
@@ -59,6 +60,7 @@ export struct LiquidTabBar {
   private lastTouchEnd: number = 0;
   private topCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
   private bottomCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
+  private glassCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
 
   aboutToAppear(): void {
     try {
@@ -215,6 +217,7 @@ export struct LiquidTabBar {
     const ui = this.getUIContext();
     ui.animateTo({ duration: 200, curve: Curve.EaseOut }, () => {
       this.pressed = -1;
+      this.barGrow = 0;
     });
     if (resetLens) {
       const seq: number = this.tapSeq;
@@ -323,6 +326,9 @@ export struct LiquidTabBar {
         // Cancel any pending collapse from the previous tap.
         this.tapSeq++;
         this.wakeLens();
+        ui.animateTo({ duration: 180, curve: Curve.EaseOut }, () => {
+          this.barGrow = 1;
+        });
 
         // The tab itself dips; the bar body stays put.
         ui.animateTo({ duration: 130, curve: Curve.EaseOut }, () => {
@@ -388,6 +394,65 @@ export struct LiquidTabBar {
     .accessibilityText(label)
   }
 
+  private capsulePath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+    const r: number = h / 2;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arc(x + w - r, y + r, r, -Math.PI / 2, 0);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arc(x + w - r, y + h - r, r, 0, Math.PI / 2);
+    ctx.lineTo(x + r, y + h);
+    ctx.arc(x + r, y + h - r, r, Math.PI / 2, Math.PI);
+    ctx.lineTo(x, y + r);
+    ctx.arc(x + r, y + r, r, Math.PI, Math.PI * 1.5);
+    ctx.closePath();
+  }
+
+  private drawGlass(): void {
+    const ctx: CanvasRenderingContext2D = this.glassCtx;
+    const w: number = this.barW;
+    const h: number = this.barH;
+    try {
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = '#D9F0F0F0';
+      ctx.fillRect(0, 0, w, h);
+
+      const frost = ctx.createLinearGradient(0, 0, 0, h);
+      frost.addColorStop(0, 'rgba(255,255,255,0.04)');
+      frost.addColorStop(0.10, 'rgba(255,255,255,0.03)');
+      frost.addColorStop(0.22, 'rgba(255,255,255,0.02)');
+      frost.addColorStop(0.36, 'rgba(255,255,255,0.012)');
+      frost.addColorStop(0.52, 'rgba(255,255,255,0.008)');
+      frost.addColorStop(0.66, 'rgba(255,255,255,0.004)');
+      frost.addColorStop(0.80, 'rgba(255,255,255,0.004)');
+      frost.addColorStop(0.92, 'rgba(255,255,255,0.008)');
+      frost.addColorStop(1, 'rgba(255,255,255,0.02)');
+      ctx.fillStyle = frost;
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.fillStyle = 'rgba(143,168,200,0.004)';
+      ctx.fillRect(0, 0, w, h);
+
+      if (this.barGrow > 0.001) {
+        // punch the lens footprint out of the bar material: the page behind
+        // the bubble is fully visible, while the rest of the bar stays grey
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.globalAlpha = Math.min(1, this.barGrow);
+        const lensW: number = this.bubbleW() * this.bloomX;
+        const lensH: number = this.bubbleH() * this.bloomY;
+        const cx: number = this.bubbleX + this.bubbleW() / 2;
+        const cy: number = this.barH / 2;
+        this.capsulePath(ctx, cx - lensW / 2, cy - lensH / 2, lensW, lensH);
+        ctx.fill();
+        ctx.restore();
+      }
+    } catch (err) {
+      // context not ready yet
+    }
+  }
+
   private onEdgeChanged(): void {
     this.drawEdge(true);
     this.drawEdge(false);
@@ -436,7 +501,7 @@ export struct LiquidTabBar {
       .width('100%')
       .height(12)
       .position({ x: 0, y: isTop ? 0 : this.barH - 12 })
-      .opacity(this.showEdgeLens && this.pageSnap !== undefined ? 1 : 0)
+      .opacity(this.showEdgeLens && this.pageSnap !== undefined && this.barGrow < 0.01 ? 1 : 0)
       .onReady(() => {
         this.drawEdge(isTop);
       })
@@ -449,42 +514,19 @@ export struct LiquidTabBar {
       // 1 + 2. the glass base
       // ---------------------------------------------------------------
       Stack() {
-        // translucent light-grey glass body, matching the reference bar
-        Column()
+        // Translucent light-grey glass body. A Canvas is used instead of a
+        // plain background so the lens can punch a fully transparent hole
+        // through the bar while it is pressed.
+        Canvas(this.glassCtx)
           .width('100%')
           .height('100%')
-          .backgroundColor('#D9F0F0F0')
+          .onReady(() => {
+            this.drawGlass();
+          })
 
         // perspective bands under the frost/rim, so the lips stay crisp
         this.EdgePerspective(true)
         this.EdgePerspective(false)
-
-        // "thickness": a narrow frosty top lip, a clear body and a faint
-        // reflective bottom lip. Keeping most of the body clear is what lets
-        // the colour of the page show through the glass.
-        Column()
-          .width('100%')
-          .height('100%')
-          .linearGradient({
-            angle: 180,
-            colors: [
-              ['#0AFFFFFF', 0],
-              ['#08FFFFFF', 0.10],
-              ['#05FFFFFF', 0.22],
-              ['#03FFFFFF', 0.36],
-              ['#02FFFFFF', 0.52],
-              ['#01FFFFFF', 0.66],
-              ['#01FFFFFF', 0.80],
-              ['#02FFFFFF', 0.92],
-              ['#08FFFFFF', 1]
-            ]
-          })
-
-        // a whisper of cool tint keeps the white material from going yellow
-        Column()
-          .width('100%')
-          .height('100%')
-          .backgroundColor('#018FA8C8')
 
         GlassRim({
           rimW: this.barW,
@@ -501,6 +543,10 @@ export struct LiquidTabBar {
       .height('100%')
       .borderRadius(this.barH / 2)
       .clip(true)
+      .scale({
+        x: 1 + (4 / this.barW) * this.barGrow,
+        y: 1 + (2 / this.barH) * this.barGrow
+      })
       .shadow({ radius: 12, color: '#0A000000', offsetX: 0, offsetY: 6 })
 
       // ---------------------------------------------------------------
@@ -516,6 +562,7 @@ export struct LiquidTabBar {
         .position({ x: 0, y: (this.barH - this.bubbleH()) / 2 })
         .translate({ x: this.bubbleX })
         .scale({ x: this.bloomX, y: this.bloomY })
+        .opacity(1 - this.barGrow)
         .hitTestBehavior(HitTestMode.None)
 
       // the lens lifts off the bar while it is hot, casting a wider shadow
@@ -528,7 +575,7 @@ export struct LiquidTabBar {
         .position({ x: 0, y: (this.barH - this.bubbleH()) / 2 })
         .translate({ x: this.bubbleX })
         .scale({ x: this.bloomX, y: this.bloomY })
-        .opacity(this.lensActive)
+        .opacity(this.lensActive * (1 - this.barGrow))
         .hitTestBehavior(HitTestMode.None)
 
       // ---------------------------------------------------------------
@@ -541,6 +588,7 @@ export struct LiquidTabBar {
             .width('100%')
             .height('100%')
             .backgroundColor('#0A000000')
+            .opacity(1 - this.lensActive)
 
           // thickness: a slightly darker top lip and lower lip
           Column()
@@ -555,6 +603,7 @@ export struct LiquidTabBar {
                 ['#08000000', 1]
               ]
             })
+            .opacity(1 - this.lensActive)
 
           // while hot: the clear, bright glass sheen
           Column()
@@ -583,7 +632,7 @@ export struct LiquidTabBar {
                 ['#00000000', 0.36]
               ]
             })
-            .opacity(0.35 + this.lensActive * 0.65)
+            .opacity((1 - this.lensActive) * 0.35)
 
           // rest rim: quiet, no dispersion
           Stack() {
@@ -600,6 +649,7 @@ export struct LiquidTabBar {
           }
           .width('100%')
           .height('100%')
+          .opacity(1 - this.lensActive)
           .hitTestBehavior(HitTestMode.None)
 
           // hot rim: bright specular + cyan/amber dispersion
